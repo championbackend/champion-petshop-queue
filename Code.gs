@@ -116,6 +116,12 @@ function doGet(e) {
     if (action === 'schedule') {
       return jsonOut(buildScheduleResponse());
     }
+    if (action === 'lookup') {
+      return jsonOut(lookupBooking(e.parameter.bookingId, e.parameter.phone));
+    }
+    if (action === 'staff') {
+      return renderStaffPage();
+    }
     return jsonOut({ error: 'unknown action: ' + action });
   } catch (err) {
     return jsonOut({ error: String(err && err.message || err) });
@@ -432,14 +438,201 @@ function readAllBookings(sh) {
     var dateObj = toDateObj(d);
     return {
       bookingId: row[idx.BookingID],
+      timestamp: row[idx.Timestamp] ? String(toDateObj(row[idx.Timestamp])) : '',
       date: formatDateYMD(dateObj),
       startTime: normalizeTime(row[idx.StartTime]),
       endTime: normalizeTime(row[idx.EndTime]),
       staff: row[idx.Staff],
       status: row[idx.Status],
-      phone: row[idx.Phone]
+      customerName: row[idx.CustomerName],
+      phone: row[idx.Phone],
+      petName: row[idx.PetName],
+      petType: row[idx.PetType],
+      service: row[idx.Service],
+      notes: row[idx.Notes]
     };
   });
+}
+
+// ================================================================
+// ค้นหาการจองเดียว (สำหรับลูกค้าเช็ก/ยกเลิก/เปลี่ยนวัน-เวลาเอง) — ต้องรู้ทั้งเลขที่จองและเบอร์โทร
+// ================================================================
+function lookupBooking(bookingId, phone) {
+  bookingId = trimStr(bookingId);
+  phone = trimStr(phone);
+  if (!bookingId || !phone) return { ok: false, error: 'กรอกเลขที่การจองและเบอร์โทรให้ครบ' };
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.bookings);
+  if (!sh) return { ok: false, error: 'ไม่พบการจอง' };
+  var all = readAllBookings(sh);
+  var found = all.filter(function (b) {
+    return String(b.bookingId) === bookingId && String(b.phone) === phone;
+  })[0];
+  if (!found) return { ok: false, error: 'ไม่พบการจอง หรือเบอร์โทรไม่ตรงกับการจองนี้' };
+  return { ok: true, booking: found };
+}
+
+// ================================================================
+// หน้าเจ้าหน้าที่ (Staff dashboard) — ดู/ยกเลิกการจองทั้งหมดโดยไม่ต้องเปิด Google Sheet
+// เข้าถึงได้เฉพาะอีเมล Google ที่อยู่ใน Settings!StaffEmails เท่านั้น (เช็คผ่าน Session.getActiveUser())
+// หมายเหตุ: ค่านี้จะมีผลจริงเฉพาะเมื่อเปิดผ่าน deployment ที่ตั้ง Access เป็น
+// "Anyone with Google account" เท่านั้น — deployment แบบ "Anyone" (ที่ลูกค้าใช้จองคิว)
+// จะไม่มีอีเมลผู้ใช้ให้เช็ค (Session.getActiveUser().getEmail() จะว่างเปล่า) จึงเข้าไม่ได้เสมอ
+// ================================================================
+function getStaffEmails() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.settings);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  var found = rows.filter(function (r) { return String(r[0]).trim() === 'StaffEmails'; })[0];
+  if (!found || !found[1]) return [];
+  return String(found[1]).split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+}
+
+function getActiveUserEmail() {
+  try {
+    return (Session.getActiveUser().getEmail() || '').toLowerCase();
+  } catch (e) {
+    return '';
+  }
+}
+
+function isAuthorizedStaff() {
+  var email = getActiveUserEmail();
+  if (!email) return false;
+  return getStaffEmails().indexOf(email) !== -1;
+}
+
+function staffGetBookings() {
+  if (!isAuthorizedStaff()) {
+    throw new Error('ไม่มีสิทธิ์เข้าถึง (' + (getActiveUserEmail() || 'ไม่พบอีเมลผู้ใช้') + ')');
+  }
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.bookings);
+  var list = readAllBookings(sh);
+  list.sort(function (a, b) {
+    var ka = a.date + ' ' + a.startTime, kb = b.date + ' ' + b.startTime;
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  return list;
+}
+
+function staffCancelBooking(bookingId) {
+  if (!isAuthorizedStaff()) {
+    throw new Error('ไม่มีสิทธิ์เข้าถึง');
+  }
+  bookingId = trimStr(bookingId);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.bookings);
+    var idx = headerIndexMap();
+    var numRows = sh.getLastRow() - 1;
+    if (numRows <= 0) return { ok: false, error: 'ไม่พบการจอง' };
+    var data = sh.getRange(2, 1, numRows, BOOKING_HEADERS.length).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (String(data[i][idx.BookingID]) === bookingId) {
+        sh.getRange(i + 2, idx.Status + 1).setValue(STATUS_CANCELLED);
+        return { ok: true, bookingId: bookingId };
+      }
+    }
+    return { ok: false, error: 'ไม่พบการจองนี้' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function escapeHtmlGs(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function renderStaffPage() {
+  var email = getActiveUserEmail();
+  var authorized = isAuthorizedStaff();
+  return HtmlService.createHtmlOutput(buildStaffHtml(email, authorized))
+    .setTitle('Champion Petshop — หน้าเจ้าหน้าที่')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function buildStaffHtml(email, authorized) {
+  if (!authorized) {
+    return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
+      '<body style="font-family:sans-serif;padding:48px 24px;text-align:center;background:#F5F4F2;color:#2C2A27;">' +
+      '<h2 style="margin-bottom:12px;">ไม่มีสิทธิ์เข้าถึงหน้านี้</h2>' +
+      '<p style="color:#5A5650;">บัญชีที่เข้าสู่ระบบ: <b>' + escapeHtmlGs(email || 'ไม่พบอีเมล (กรุณาเข้าสู่ระบบด้วยบัญชี Google)') + '</b></p>' +
+      '<p style="color:#5A5650;">กรุณาแจ้งผู้ดูแลระบบให้เพิ่มอีเมลนี้ในชีต Settings แถว <code>StaffEmails</code></p>' +
+      '</body></html>';
+  }
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>Champion Petshop — หน้าเจ้าหน้าที่</title>' +
+    '<style>' +
+    'body{font-family:-apple-system,"Segoe UI",Kanit,sans-serif;margin:0;background:#F5F4F2;color:#2C2A27;}' +
+    '.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px;}' +
+    'h1{font-size:20px;margin:0 0 4px;}' +
+    '.sub{color:#5A5650;font-size:13px;margin-bottom:16px;}' +
+    '.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}' +
+    'input[type=text]{padding:9px 12px;border:1.5px solid #D9D7D2;border-radius:10px;font-size:14px;min-width:220px;}' +
+    'button{cursor:pointer;border:none;border-radius:999px;padding:9px 16px;font-weight:700;font-size:13.5px;background:#3E5A47;color:#fff;}' +
+    'button.ghost{background:#fff;color:#3E5A47;border:1.5px solid #D9D7D2;}' +
+    'button.danger{background:#C0553F;}' +
+    'button:disabled{opacity:.5;cursor:not-allowed;}' +
+    'table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(27,38,30,.07);}' +
+    'th,td{padding:10px 12px;text-align:left;font-size:13px;border-bottom:1px solid #EFEEEC;white-space:nowrap;}' +
+    'th{background:#EEF3EF;color:#403D38;font-weight:700;position:sticky;top:0;}' +
+    'tr:last-child td{border-bottom:none;}' +
+    '.status-active{color:#3E7A52;font-weight:700;}' +
+    '.status-cancelled{color:#9A948B;}' +
+    '.status-blocked{color:#B07C1E;font-weight:700;}' +
+    '.tablewrap{overflow:auto;max-height:70vh;border-radius:12px;}' +
+    '.empty{padding:40px;text-align:center;color:#5A5650;}' +
+    '.me{font-size:12px;color:#5A5650;}' +
+    '</style></head><body><div class="wrap">' +
+    '<h1>Champion Petshop — หน้าเจ้าหน้าที่</h1>' +
+    '<div class="sub">รายการจองทั้งหมด (ไม่ต้องเปิด Google Sheet) · เข้าสู่ระบบเป็น <span class="me">' + escapeHtmlGs(email) + '</span></div>' +
+    '<div class="toolbar">' +
+    '<input type="text" id="q" placeholder="ค้นหา: ชื่อ / เบอร์โทร / เลขที่การจอง">' +
+    '<button class="ghost" id="btn-refresh">รีเฟรช</button>' +
+    '<span id="count" style="font-size:12.5px;color:#5A5650;"></span>' +
+    '</div>' +
+    '<div id="tablewrap" class="tablewrap"><div class="empty">กำลังโหลด...</div></div>' +
+    '</div>' +
+    '<script>' +
+    'var ALL = [];' +
+    'function load(){ google.script.run.withSuccessHandler(onData).withFailureHandler(onError).staffGetBookings(); }' +
+    'function onError(e){ document.getElementById("tablewrap").innerHTML = "<div class=empty>โหลดไม่สำเร็จ: " + (e && e.message ? e.message : e) + "</div>"; }' +
+    'function onData(list){ ALL = list || []; renderTable(); }' +
+    'function statusClass(s){ if (s === "จอง") return "status-active"; if (s === "ปิด") return "status-blocked"; return "status-cancelled"; }' +
+    'function esc(s){ return String(s == null ? "" : s).replace(/[&<>"\x27]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\x27":"&#39;"}[c]; }); }' +
+    'function renderTable(){' +
+    '  var q = (document.getElementById("q").value || "").trim().toLowerCase();' +
+    '  var rows = ALL.filter(function(b){ if (!q) return true; return [b.bookingId,b.customerName,b.phone,b.petName,b.staff].join(" ").toLowerCase().indexOf(q) !== -1; });' +
+    '  document.getElementById("count").textContent = rows.length + " / " + ALL.length + " รายการ";' +
+    '  if (!rows.length){ document.getElementById("tablewrap").innerHTML = "<div class=empty>ไม่พบรายการ</div>"; return; }' +
+    '  var html = "<table><thead><tr><th>วันที่</th><th>เวลา</th><th>ช่าง</th><th>สถานะ</th><th>ลูกค้า</th><th>เบอร์โทร</th><th>สัตว์เลี้ยง</th><th>บริการ</th><th>เลขที่จอง</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>";' +
+    '  rows.forEach(function(b){' +
+    '    html += "<tr><td>" + esc(b.date) + "</td><td>" + esc(b.startTime) + "–" + esc(b.endTime) + "</td><td>" + esc(b.staff) + "</td>" +' +
+    '      "<td class=" + statusClass(b.status) + ">" + esc(b.status) + "</td><td>" + esc(b.customerName) + "</td><td>" + esc(b.phone) + "</td>" +' +
+    '      "<td>" + esc(b.petName) + (b.petType ? " (" + esc(b.petType) + ")" : "") + "</td><td>" + esc(b.service) + "</td><td>" + esc(b.bookingId) + "</td>" +' +
+    '      "<td>" + esc(b.notes) + "</td><td>" + (b.status === "จอง" ? "<button class=danger data-id=\"" + esc(b.bookingId) + "\">ยกเลิก</button>" : "") + "</td></tr>";' +
+    '  });' +
+    '  html += "</tbody></table>";' +
+    '  document.getElementById("tablewrap").innerHTML = html;' +
+    '  document.querySelectorAll("button[data-id]").forEach(function(btn){' +
+    '    btn.onclick = function(){' +
+    '      if (!confirm("ยืนยันยกเลิกการจอง " + btn.getAttribute("data-id") + " ?")) return;' +
+    '      btn.disabled = true; btn.textContent = "กำลังยกเลิก...";' +
+    '      google.script.run.withSuccessHandler(function(res){' +
+    '        if (res && res.ok) { load(); } else { alert((res && res.error) || "ยกเลิกไม่สำเร็จ"); btn.disabled = false; btn.textContent = "ยกเลิก"; }' +
+    '      }).withFailureHandler(function(e){ alert(e && e.message ? e.message : e); btn.disabled = false; btn.textContent = "ยกเลิก"; })' +
+    '        .staffCancelBooking(btn.getAttribute("data-id"));' +
+    '    };' +
+    '  });' +
+    '}' +
+    'window.addEventListener("DOMContentLoaded", function(){' +
+    '  document.getElementById("btn-refresh").onclick = load;' +
+    '  document.getElementById("q").oninput = renderTable;' +
+    '  load();' +
+    '});' +
+    '</script></body></html>';
 }
 
 // ================================================================
