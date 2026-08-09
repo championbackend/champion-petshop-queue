@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Champion Petshop | จองคิวอาบน้ำ-ตัดขนสัตว์เลี้ยง</title>
+<meta name="description" content="เช็กคิวว่างและจองคิวอาบน้ำ-ตัดขนสัตว์เลี้ยงกับ Champion Petshop">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============ Design tokens (Champion Petshop brand) ============ */
+:root{
+  --forest-950:#1B261E;--forest-900:#23301F;--forest-800:#2F4436;--forest-700:#3E5A47;--forest-600:#4A6853;--forest-500:#55765E;--forest-400:#6F8C77;--forest-300:#8FA895;--forest-200:#BACCBF;--forest-100:#DCE6DE;--forest-50:#EEF3EF;
+  --sage-700:#5E7C60;--sage-600:#77987A;--sage-500:#96B297;--sage-400:#A9C1AA;--sage-300:#C0D2C1;--sage-200:#D6E2D7;--sage-100:#E8EFE8;--sage-50:#F3F7F3;
+  --fawn-800:#7E5B31;--fawn-700:#A07446;--fawn-600:#B4885A;--fawn-500:#C49A6C;--fawn-400:#D2AE86;--fawn-300:#E0C6A7;--fawn-200:#EDDCC7;--fawn-100:#F6EDE1;--fawn-50:#FBF6EF;
+  --bone-500:#D9D7D2;--bone-400:#E4E2DE;--bone-300:#EFEEEC;--bone-200:#F5F4F2;--bone-100:#FAFAF9;--white:#FFFFFF;
+  --ink-900:#1C1B19;--ink-800:#2C2A27;--ink-700:#403D38;--ink-600:#5A5650;--ink-500:#78736B;--ink-400:#9A948B;--ink-300:#BEB9B1;
+  --success-600:#3E7A52;--success-500:#4C9364;--success-100:#E1F0E6;
+  --warning-600:#B07C1E;--warning-500:#D9A441;--warning-100:#FBEFD6;
+  --danger-600:#A2432F;--danger-500:#C0553F;--danger-100:#F8E4DE;
+  --info-600:#3A6B78;--info-500:#4C8797;--info-100:#E0EFF2;
+
+  --surface-page:var(--bone-300);--surface-card:var(--white);--surface-sunken:var(--bone-400);--surface-brand:var(--forest-500);--surface-brand-soft:var(--sage-100);--surface-accent-soft:var(--fawn-100);
+  --text-body:var(--ink-800);--text-heading:var(--ink-900);--text-muted:var(--ink-500);--text-subtle:var(--ink-400);--text-on-brand:var(--white);--text-brand:var(--forest-600);--text-link:var(--forest-600);
+  --border-subtle:var(--bone-400);--border-default:var(--bone-500);--border-strong:var(--ink-300);--border-brand:var(--forest-500);
+
+  --font-display:"Kanit","Nunito Sans",system-ui,-apple-system,sans-serif;--font-text:"Kanit","Nunito Sans",system-ui,-apple-system,sans-serif;
+
+  --radius-xs:6px;--radius-sm:10px;--radius-md:14px;--radius-lg:20px;--radius-xl:28px;--radius-pill:999px;--radius-circle:50%;
+  --space-3:8px;--space-4:12px;--space-5:16px;--space-6:20px;--space-7:24px;
+
+  --shadow-sm:0 2px 6px rgba(27,38,30,.07);
+  --shadow-md:0 8px 20px -6px rgba(27,38,30,.12);
+  --shadow-lg:0 20px 44px -16px rgba(27,38,30,.18);
+
+  --dur-fast:140ms;--ease-out:cubic-bezier(.22,.75,.25,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--surface-page);color:var(--text-body);font-family:var(--font-text);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--font-display);color:var(--text-heading);font-weight:800;letter-spacing:-0.01em;margin:0}
+p{margin:0}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px}
+::selection{background:var(--sage-300);color:var(--ink-900)}
+@keyframes cpPulse{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes cpRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes cpSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.cp-app{min-height:100vh;display:flex;justify-content:center;background:var(--surface-page)}
+.cp-shell{width:100%;max-width:480px;min-height:100vh;background:var(--surface-page);display:flex;flex-direction:column;position:relative}
+
+/* header */
+.cp-header{position:sticky;top:0;z-index:20;background:rgba(239,238,236,.92);backdrop-filter:saturate(140%) blur(14px);border-bottom:1px solid var(--border-subtle);padding:16px 20px 12px;display:flex;flex-direction:column;gap:10px}
+.cp-header-row{display:flex;align-items:center;gap:12px}
+.cp-logo{width:48px;height:48px;border-radius:50%;background:var(--sage-100);display:flex;align-items:center;justify-content:center;flex:0 0 auto;border:1.5px solid var(--border-default)}
+.cp-brand{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.cp-brand-name{font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--text-heading);line-height:1.15}
+.cp-brand-tag{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-brand)}
+.cp-iconbtn{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--border-default);background:var(--white);display:flex;align-items:center;justify-content:center;color:var(--ink-700);transition:transform var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out);flex:0 0 auto}
+.cp-iconbtn:hover{background:var(--sage-50)}
+.cp-iconbtn:active{transform:scale(.92)}
+.cp-iconbtn.spinning svg{animation:cpSpin .8s linear infinite}
+.cp-meta-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-muted)}
+.cp-mock-badge{font-size:11px;font-weight:700;color:var(--warning-600);background:var(--warning-100);display:inline-flex;padding:3px 10px;border-radius:999px;width:fit-content}
+
+/* tabs */
+.cp-tabs{display:flex;gap:6px;padding:14px 20px 0}
+.cp-tab{flex:1;text-align:center;padding:10px 8px;border-radius:var(--radius-pill);border:1.5px solid var(--border-default);background:var(--white);font-weight:700;font-size:13.5px;color:var(--ink-700);transition:var(--dur-fast) var(--ease-out)}
+.cp-tab.active{background:var(--forest-500);border-color:var(--forest-500);color:var(--white);box-shadow:var(--shadow-sm)}
+
+/* card */
+.cp-card{background:var(--white);border-radius:var(--radius-lg);padding:14px 16px}
+.cp-card.tone-sage{background:var(--sage-100)}
+.cp-card.tone-fawn{background:var(--fawn-100)}
+.cp-card.tone-plain{border:1px solid var(--border-subtle);box-shadow:var(--shadow-sm)}
+.cp-info-row{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.55}
+
+/* date pills */
+.cp-daylist{display:flex;gap:10px;overflow-x:auto;padding:2px 20px 8px}
+.cp-day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:56px;height:68px;padding:0 6px;border-radius:var(--radius-lg);flex:0 0 auto;border:1.5px solid var(--border-default);background:var(--white);color:var(--ink-800);transition:var(--dur-fast) var(--ease-out)}
+.cp-day.today{border-color:var(--forest-500);color:var(--forest-700)}
+.cp-day.selected{background:var(--forest-500);border-color:var(--forest-500);color:var(--white);box-shadow:var(--shadow-sm)}
+.cp-day .wd{font-size:12px;font-weight:700}
+.cp-day .num{font-family:var(--font-display);font-size:18px;font-weight:800}
+.cp-day .tag{font-size:10px;font-weight:700;opacity:.85}
+
+/* legend */
+.cp-legend{display:flex;gap:14px;flex-wrap:wrap;padding:0 20px}
+.cp-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted)}
+.cp-swatch{width:12px;height:12px;border-radius:3px}
+
+/* grid */
+.cp-gridwrap{overflow-x:auto;padding:4px 20px 8px}
+.cp-grid{display:flex;flex-direction:column;gap:3px;width:fit-content}
+.cp-grid-row{display:flex;gap:3px}
+.cp-rowlabel{width:82px;flex:0 0 82px;position:sticky;left:0;z-index:1;background:var(--white);border:1px solid var(--border-subtle);border-radius:var(--radius-xs);display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:700;color:var(--ink-800)}
+.cp-collabel{width:44px;flex:0 0 44px;text-align:center;font-size:10px;color:var(--text-muted);padding:0 0 4px}
+.cp-cell{width:44px;flex:0 0 44px;height:38px;border-radius:var(--radius-xs);background:var(--white);border:1.5px solid var(--border-default)}
+.cp-cell.booked{background:var(--danger-500);border-color:var(--danger-500)}
+.cp-cell.closed{background:var(--ink-300);border-color:var(--ink-300)}
+.cp-cell.past{background:var(--ink-300);border-color:var(--ink-300);opacity:.6}
+.cp-cell.valid-start{background:var(--white);border:2px solid var(--forest-500);cursor:pointer;transition:transform var(--dur-fast) var(--ease-out)}
+.cp-cell.valid-start:hover{background:var(--sage-100);transform:scale(1.06)}
+.cp-cell.valid-start.picked{background:var(--forest-500);border-color:var(--forest-500)}
+.cp-cell.unavailable-for-duration{background:var(--bone-400);border-color:var(--bone-400)}
+.cp-corner{width:82px;flex:0 0 82px;position:sticky;left:0;background:var(--surface-page)}
+
+/* buttons */
+.cp-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border-radius:999px;font-weight:700;font-size:14.5px;border:1.5px solid transparent;transition:var(--dur-fast) var(--ease-out);text-decoration:none}
+.cp-btn.lg{height:54px;font-size:15.5px}
+.cp-btn.full{width:100%}
+.cp-btn.primary{background:var(--forest-500);color:var(--white)}
+.cp-btn.primary:hover{background:var(--forest-600)}
+.cp-btn.primary:disabled{background:var(--bone-500);color:var(--ink-400);cursor:not-allowed}
+.cp-btn.secondary{background:var(--white);color:var(--forest-700);border-color:var(--border-default)}
+.cp-btn.secondary:hover{background:var(--sage-50)}
+.cp-btn.ghost{background:transparent;color:var(--ink-600);border-color:transparent}
+.cp-btn:active{transform:scale(.97)}
+
+/* sticky footer */
+.cp-footer{position:sticky;bottom:0;width:100%;background:rgba(250,250,249,.97);backdrop-filter:blur(14px) saturate(140%);border-top:1px solid var(--border-subtle);padding:14px 20px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px;z-index:30;box-shadow:var(--shadow-lg);margin-top:auto}
+.cp-footer-note{font-size:11.5px;line-height:1.5;color:var(--text-muted)}
+.cp-footer-row{display:flex;gap:10px}
+
+/* service cards */
+.cp-services{display:flex;flex-direction:column;gap:10px;padding:4px 20px 8px}
+.cp-service{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--white);border:1.5px solid var(--border-default);border-radius:var(--radius-md);padding:14px 16px;transition:var(--dur-fast) var(--ease-out)}
+.cp-service:hover{border-color:var(--forest-400)}
+.cp-service.selected{border-color:var(--forest-500);background:var(--sage-50);box-shadow:var(--shadow-sm)}
+.cp-service-name{font-weight:700;color:var(--ink-800);font-size:14.5px}
+.cp-service-meta{font-size:12px;color:var(--text-muted);margin-top:2px}
+.cp-service-price{font-family:var(--font-display);font-weight:800;color:var(--forest-700);font-size:15px;white-space:nowrap}
+
+/* chips */
+.cp-chiprow{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px}
+.cp-chip{padding:9px 14px;border-radius:999px;border:1.5px solid var(--border-default);background:var(--white);font-size:13px;font-weight:700;color:var(--ink-700)}
+.cp-chip.selected{background:var(--forest-500);border-color:var(--forest-500);color:var(--white)}
+
+/* form */
+.cp-form{display:flex;flex-direction:column;gap:12px;padding:4px 20px 8px}
+.cp-field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-600);margin-bottom:6px}
+.cp-field input,.cp-field select,.cp-field textarea{width:100%;border:1.5px solid var(--border-default);border-radius:var(--radius-md);padding:11px 13px;background:var(--white);color:var(--ink-800);outline:none;transition:border-color var(--dur-fast) var(--ease-out)}
+.cp-field input:focus,.cp-field select:focus,.cp-field textarea:focus{border-color:var(--forest-500)}
+.cp-field textarea{resize:vertical;min-height:64px}
+.cp-error-text{color:var(--danger-600);font-size:12.5px;font-weight:600}
+
+/* step header */
+.cp-stepbar{display:flex;align-items:center;gap:8px;padding:14px 20px 4px}
+.cp-stepdot{width:8px;height:8px;border-radius:50%;background:var(--bone-500)}
+.cp-stepdot.active{background:var(--forest-500);width:20px;border-radius:4px}
+.cp-steptitle{font-family:var(--font-display);font-weight:800;font-size:16px;padding:6px 20px 2px}
+.cp-stepsub{font-size:12.5px;color:var(--text-muted);padding:0 20px 6px}
+
+/* success screen */
+.cp-success{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:36px 24px}
+.cp-success-icon{width:64px;height:64px;border-radius:50%;background:var(--success-100);display:flex;align-items:center;justify-content:center;color:var(--success-600)}
+.cp-receipt{width:100%;background:var(--white);border:1.5px dashed var(--border-default);border-radius:var(--radius-md);padding:14px 16px;text-align:left;display:flex;flex-direction:column;gap:6px}
+.cp-receipt-row{display:flex;justify-content:space-between;font-size:13.5px}
+.cp-receipt-row .k{color:var(--text-muted)}
+.cp-receipt-row .v{font-weight:700;color:var(--ink-800)}
+
+/* skeleton / empty / error */
+.cp-skel{height:42px;border-radius:6px;background:var(--bone-400);animation:cpPulse 1.2s ease-in-out infinite}
+.cp-emptystate{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:40px 24px}
+.cp-emptystate-icon{width:52px;height:52px;border-radius:50%;background:var(--danger-100);display:flex;align-items:center;justify-content:center;color:var(--danger-600)}
+.cp-toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink-900);color:var(--white);padding:10px 18px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);z-index:100;animation:cpRise .2s var(--ease-out)}
+.cp-fadein{animation:cpRise .25s var(--ease-out)}
+</style>
+</head>
+<body>
+<div class="cp-app">
+  <div class="cp-shell" id="app"></div>
+</div>
+
+<script>
+const APPS_SCRIPT_URL = '';
+
+const FALLBACK = {
+  shopName: 'Champion Petshop',
+  tagline: 'จองคิวอาบน้ำ-ตัดขน',
+  hoursText: '10:00–20:00 น. ทุกวัน',
+  lineOaId: '@championpetshop',
+  openTime: '10:00',
+  closeTime: '20:00',
+  slotMinutes: 30,
+  staffList: ['ช่างพิมพ์', 'พี่ใหม่', 'เต้น', 'ว่ายน้ำ'],
+  services: [
+    { name: 'อาบน้ำ-เป่าขน', durationMinutes: 60, price: 300 },
+    { name: 'อาบน้ำ-ตัดขน', durationMinutes: 120, price: 600 },
+    { name: 'ตัดเล็บ-ทำความสะอาดหู', durationMinutes: 30, price: 150 },
+    { name: 'สปาบำรุงขน', durationMinutes: 90, price: 450 }
+  ],
+  daysAhead: 10
+};
+
+const ICONS = {
+  paw: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="8" r="2.2"/><circle cx="12" cy="5.5" r="2.2"/><circle cx="16.5" cy="8" r="2.2"/><circle cx="19" cy="12.5" r="2"/><path d="M12 12c-3 0-6.5 2.2-6.5 5.6C5.5 20 7.3 21 9 20.2c1-.5 2-.7 3-.7s2 .2 3 .7c1.7.8 3.5-.2 3.5-2.6C18.5 14.2 15 12 12 12Z"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.6"/><path d="M20 5v6h-6"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/><path d="M9 12l2 2 4-4"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  arrowRight: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  chevronLeft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+};
+
+const state = {
+  loading: true,
+  error: false,
+  schedule: null,
+  isMock: true,
+  lastUpdated: null,
+  selectedDayIndex: 0,
+  tab: 'check',
+  booking: freshBooking()
+};
+
+function freshBooking() {
+  return {
+    step: 1,
+    service: null,
+    dayIndex: 0,
+    staff: '',
+    startTime: null,
+    contact: { name: '', phone: '', petName: '', petType: '', notes: '' },
+    submitting: false,
+    submitError: null,
+    result: null
+  };
+}
+
+function loadSchedule(background) {
+  if (!background) { state.loading = true; state.error = false; render(); }
+  if (APPS_SCRIPT_URL) {
+    fetch(APPS_SCRIPT_URL + '?action=schedule')
+      .then(r => r.json())
+      .then(json => {
+        if (json.error) throw new Error(json.error);
+        state.schedule = json;
+        state.isMock = false;
+        state.loading = false; state.error = false;
+        state.lastUpdated = new Date();
+        render();
+      })
+      .catch(() => { state.loading = false; state.error = true; render(); });
+  } else {
+    setTimeout(() => {
+      state.schedule = generateMockSchedule();
+      state.isMock = true;
+      state.loading = false; state.error = false;
+      state.lastUpdated = new Date();
+      render();
+    }, background ? 300 : 600);
+  }
+}
+
+function generateMockSchedule() {
+  const { openTime, closeTime, slotMinutes, staffList, daysAhead, services, shopName, tagline, hoursText, lineOaId } = FALLBACK;
+  const openMinutes = timeToMinutes(openTime), closeMinutes = timeToMinutes(closeTime);
+  const totalSlots = Math.round((closeMinutes - openMinutes) / slotMinutes);
+  const seed = Math.floor(Date.now() / 60000);
+  const days = [];
+  const now = new Date();
+  for (let d = 0; d < daysAhead; d++) {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+    const dateStr = formatDateYMD(date);
+    const bookedMap = {};
+    staffList.forEach((name, sIdx) => {
+      const arr = new Array(totalSlots).fill(false);
+      let idx = 0, step = 0;
+      const rnd = () => { step += 1; return seededRandom(seed + d * 5003 + sIdx * 733 + step * 97); };
+      while (idx < totalSlots) {
+        idx += Math.floor(rnd() * 3);
+        if (idx >= totalSlots) break;
+        const w = rnd();
+        const length = w < 0.6 ? (3 + Math.floor(rnd() * 3)) : w < 0.85 ? (1 + Math.floor(rnd() * 2)) : (6 + Math.floor(rnd() * 3));
+        for (let k = idx; k < Math.min(totalSlots, idx + length); k++) arr[k] = true;
+        idx += length;
+      }
+      bookedMap[name] = arr;
+    });
+    const slots = [];
+    for (let i = 0; i < totalSlots; i++) {
+      const staffObj = {};
+      staffList.forEach(name => { staffObj[name] = bookedMap[name][i] ? 'booked' : null; });
+      slots.push({ start: minutesToTime(openMinutes + i * slotMinutes), staff: staffObj });
+    }
+    days.push({ date: dateStr, slots });
+  }
+  return { shopName, tagline, hoursText, lineOaId, openTime, closeTime, slotMinutes, staffList, services, days, generatedAt: new Date().toISOString() };
+}
+
+function seededRandom(seed) { const x = Math.sin(seed) * 10000; return x - Math.floor(x); }
+
+function timeToMinutes(t) { const p = String(t).split(':'); return Number(p[0]) * 60 + Number(p[1] || 0); }
+function minutesToTime(m) { const h = Math.floor(m / 60), mm = m % 60; return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); }
+function formatDateYMD(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function parseYMD(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+function weekdayShort(d) { return ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'][d.getDay()]; }
+function monthsFull() { return ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']; }
+function dateFull(d) {
+  const weekdays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+  return 'วัน' + weekdays[d.getDay()] + 'ที่ ' + d.getDate() + ' ' + monthsFull()[d.getMonth()] + ' ' + (d.getFullYear() + 543);
+}
+function isSameDate(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function fmtBaht(n) { return Number(n).toLocaleString('th-TH'); }
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'cp-toast'; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2400);
+}
+
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = renderHeader() + renderTabs() + renderBody() + renderFooter();
+  bindEvents();
+}
+
+function brand() { return state.schedule || FALLBACK; }
+
+function renderHeader() {
+  const b = brand();
+  const lastText = state.lastUpdated ? 'อัปเดตล่าสุด ' + String(state.lastUpdated.getHours()).padStart(2, '0') + ':' + String(state.lastUpdated.getMinutes()).padStart(2, '0') + ' น.' : ' ';
+  return `
+  <div class="cp-header">
+    <div class="cp-header-row">
+      <div class="cp-logo">${ICONS.paw}</div>
+      <div class="cp-brand">
+        <div class="cp-brand-name">${escapeHtml(b.shopName)}</div>
+        <div class="cp-brand-tag">${escapeHtml(b.tagline || FALLBACK.tagline)}</div>
+      </div>
+      <button class="cp-iconbtn ${state.loading ? 'spinning' : ''}" id="btn-refresh" aria-label="รีเฟรชคิว">${ICONS.refresh}</button>
+    </div>
+    <div class="cp-meta-row">
+      <span>${lastText}</span>
+      <span>เปิด ${escapeHtml(b.hoursText || FALLBACK.hoursText)}</span>
+    </div>
+    ${state.isMock && !state.loading ? `<div class="cp-mock-badge">ตัวอย่างข้อมูลจำลอง — ยังไม่เชื่อมต่อ Google Sheet</div>` : ''}
+  </div>`;
+}
+
+function renderTabs() {
+  return `
+  <div class="cp-tabs">
+    <button class="cp-tab ${state.tab === 'check' ? 'active' : ''}" data-tab="check">เช็กคิวว่าง</button>
+    <button class="cp-tab ${state.tab === 'book' ? 'active' : ''}" data-tab="book">จองคิวเลย</button>
+  </div>`;
+}
+
+function renderBody() {
+  if (state.error) return renderErrorState();
+  if (state.loading || !state.schedule) return renderLoadingState();
+  return state.tab === 'check' ? renderCheckTab() : renderBookTab();
+}
+
+function renderErrorState() {
+  return `
+  <div class="cp-emptystate">
+    <div class="cp-emptystate-icon">${ICONS.x}</div>
+    <div style="font-family:var(--font-display);font-weight:800;font-size:16px;">โหลดข้อมูลคิวไม่สำเร็จ</div>
+    <div style="font-size:13px;color:var(--text-muted);">เชื่อมต่อกับตารางคิวของร้านไม่สำเร็จ ลองใหม่อีกครั้ง</div>
+    <button class="cp-btn secondary" id="btn-retry">ลองใหม่อีกครั้ง</button>
+  </div>`;
+}
+
+function renderLoadingState() {
+  return `<div style="padding:16px 20px 24px;display:flex;flex-direction:column;gap:6px;">
+    ${[1,2,3,4].map(() => `<div class="cp-skel"></div>`).join('')}
+  </div>`;
+}
+
+function renderCheckTab() {
+  const sc = state.schedule;
+  const days = sc.days;
+  const now = new Date();
+  if (state.selectedDayIndex >= days.length) state.selectedDayIndex = 0;
+  const day = days[state.selectedDayIndex];
+  const dayDate = parseYMD(day.date);
+
+  let totalAvailable = 0;
+  const rows = sc.staffList.map(name => {
+    const cells = day.slots.map(s => {
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const isPast = isSameDate(dayDate, now) && timeToMinutes(s.start) <= nowMinutes;
+      const raw = s.staff[name];
+      let status = isPast ? 'past' : (raw === 'closed' ? 'closed' : (raw === 'booked' ? 'booked' : 'available'));
+      if (status === 'available') totalAvailable++;
+      const label = status === 'available' ? 'ว่าง' : status === 'booked' ? 'ไม่ว่าง' : status === 'closed' ? 'หยุด' : 'ผ่านไปแล้ว';
+      return `<div class="cp-cell ${status !== 'available' ? status : ''}" title="${name} ${s.start} — ${label}"></div>`;
+    }).join('');
+    return `<div class="cp-grid-row"><div class="cp-rowlabel">${escapeHtml(name)}</div>${cells}</div>`;
+  }).join('');
+
+  const cols = day.slots.map(s => `<div class="cp-collabel" style="font-weight:${s.start.endsWith(':00') ? '800' : '500'}">${s.start}</div>`).join('');
+
+  return `
+  <div style="padding:16px 20px 0;">
+    <div class="cp-card tone-sage">
+      <div class="cp-info-row">${ICONS.shield}<div>ตารางนี้แสดงคิวว่างเบื้องต้น กดแท็บ “จองคิวเลย” เพื่อจองผ่านเว็บได้ทันที หรือทักแชท LINE ของร้านด้านล่าง</div></div>
+    </div>
+  </div>
+  <div style="padding:18px 0 4px;display:flex;flex-direction:column;gap:10px;">
+    <div style="padding:0 20px;font-family:var(--font-display);font-weight:800;font-size:15px;">เลือกวันที่</div>
+    <div class="cp-daylist">${renderDayPills(days, state.selectedDayIndex, 'select-day')}</div>
+  </div>
+  <div style="padding:0 20px 4px;font-size:13px;font-weight:600;color:var(--text-muted);">${dateFull(dayDate)}</div>
+  <div style="display:flex;flex-direction:column;gap:12px;padding:8px 0 24px;">
+    ${totalAvailable === 0 ? `<div style="padding:0 20px;"><div class="cp-card tone-fawn"><div class="cp-info-row">${ICONS.calendar}<div>วันนี้คิวเต็มทุกช่วงเวลาแล้ว ลองเลือกวันถัดไป</div></div></div></div>` : ''}
+    <div style="padding:0 20px;font-size:12.5px;font-weight:600;color:var(--text-muted);">ว่างทั้งหมด ${totalAvailable} ช่วงเวลา</div>
+    <div class="cp-legend">
+      <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--white);border:1.5px solid var(--border-default);"></div>ว่าง</div>
+      <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--danger-500);"></div>ไม่ว่าง</div>
+      <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--ink-300);"></div>หยุด/ผ่านไปแล้ว</div>
+    </div>
+    <div class="cp-gridwrap">
+      <div class="cp-grid">
+        <div class="cp-grid-row"><div class="cp-corner"></div>${cols}</div>
+        ${rows}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDayPills(days, selectedIndex, action) {
+  const now = new Date();
+  return days.map((day, i) => {
+    const d = parseYMD(day.date);
+    const isToday = isSameDate(d, now);
+    const cls = ['cp-day'];
+    if (i === selectedIndex) cls.push('selected'); else if (isToday) cls.push('today');
+    return `<button class="${cls.join(' ')}" data-action="${action}" data-index="${i}">
+      <div class="wd">${weekdayShort(d)}</div>
+      <div class="num">${d.getDate()}</div>
+      ${isToday ? `<div class="tag">วันนี้</div>` : ''}
+    </button>`;
+  }).join('');
+}
+
+function renderBookTab() {
+  const b = state.booking;
+  if (b.step === 5 && b.result) return renderBookingSuccess();
+  return `
+  <div class="cp-stepbar">
+    ${[1,2,3,4].map(n => `<div class="cp-stepdot ${b.step === n ? 'active' : ''}"></div>`).join('')}
+  </div>
+  ${b.step === 1 ? renderStepService() : ''}
+  ${b.step === 2 ? renderStepDateStaff() : ''}
+  ${b.step === 3 ? renderStepTime() : ''}
+  ${b.step === 4 ? renderStepContact() : ''}
+  `;
+}
+
+function renderStepService() {
+  const services = brand().services || FALLBACK.services;
+  const b = state.booking;
+  return `
+  <div class="cp-steptitle">เลือกบริการ</div>
+  <div class="cp-stepsub">เลือกบริการที่ต้องการจองคิว</div>
+  <div class="cp-services">
+    ${services.map((s, i) => `
+      <button class="cp-service ${b.service && b.service.name === s.name ? 'selected' : ''}" data-action="pick-service" data-index="${i}">
+        <div>
+          <div class="cp-service-name">${escapeHtml(s.name)}</div>
+          <div class="cp-service-meta">ใช้เวลาประมาณ ${s.durationMinutes} นาที</div>
+        </div>
+        <div class="cp-service-price">฿${fmtBaht(s.price)}</div>
+      </button>`).join('')}
+  </div>`;
+}
+
+function renderStepDateStaff() {
+  const sc = state.schedule;
+  const b = state.booking;
+  return `
+  <div class="cp-steptitle">เลือกวันที่และช่าง</div>
+  <div class="cp-stepsub">${escapeHtml(b.service.name)} · ${b.service.durationMinutes} นาที</div>
+  <div style="padding:6px 20px 4px;font-size:13px;font-weight:700;color:var(--ink-700);">วันที่</div>
+  <div class="cp-daylist">${renderDayPills(sc.days, b.dayIndex, 'pick-day')}</div>
+  <div style="padding:14px 20px 4px;font-size:13px;font-weight:700;color:var(--ink-700);">ช่าง (ถ้าไม่เลือก ระบบจะเลือกช่างที่ว่างให้อัตโนมัติ)</div>
+  <div class="cp-chiprow">
+    <button class="cp-chip ${b.staff === '' ? 'selected' : ''}" data-action="pick-staff" data-staff="">ไม่ระบุ</button>
+    ${sc.staffList.map(name => `<button class="cp-chip ${b.staff === name ? 'selected' : ''}" data-action="pick-staff" data-staff="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}
+  </div>`;
+}
+
+function computeDurationSlots() {
+  const b = state.booking;
+  return Math.ceil(b.service.durationMinutes / (state.schedule.slotMinutes || 30));
+}
+
+function renderStepTime() {
+  const sc = state.schedule;
+  const b = state.booking;
+  const day = sc.days[b.dayIndex];
+  const dayDate = parseYMD(day.date);
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const isToday = isSameDate(dayDate, now);
+  const durationSlots = computeDurationSlots();
+  const staffRows = b.staff ? [b.staff] : sc.staffList;
+
+  const rowsHtml = staffRows.map(name => {
+    const cells = day.slots.map((s, i) => {
+      const isPast = isToday && timeToMinutes(s.start) <= nowMinutes;
+      const raw = day.slots[i].staff[name];
+      let base = isPast ? 'past' : (raw === 'closed' ? 'closed' : (raw === 'booked' ? 'booked' : 'available'));
+      let cls = base;
+      let clickable = false;
+      if (base === 'available') {
+        let fits = (i + durationSlots) <= day.slots.length;
+        if (fits) {
+          for (let k = i; k < i + durationSlots; k++) {
+            const r = day.slots[k].staff[name];
+            const kPast = isToday && timeToMinutes(day.slots[k].start) <= nowMinutes;
+            if (r === 'closed' || r === 'booked' || kPast) { fits = false; break; }
+          }
+        }
+        if (fits) { cls = 'valid-start'; clickable = true; }
+        else { cls = 'unavailable-for-duration'; }
+      }
+      const picked = b.startTime === s.start && (b.staff ? b.staff === name : true) && clickable;
+      if (picked) cls += ' picked';
+      const attrs = clickable ? `data-action="pick-time" data-staff="${escapeHtml(name)}" data-time="${s.start}"` : '';
+      return `<button class="cp-cell ${cls}" ${attrs} ${clickable ? '' : 'disabled tabindex="-1"'} title="${escapeHtml(name)} ${s.start}"></button>`;
+    }).join('');
+    return `<div class="cp-grid-row"><div class="cp-rowlabel">${escapeHtml(name)}</div>${cells}</div>`;
+  }).join('');
+
+  const cols = day.slots.map(s => `<div class="cp-collabel" style="font-weight:${s.start.endsWith(':00') ? '800' : '500'}">${s.start}</div>`).join('');
+
+  return `
+  <div class="cp-steptitle">เลือกเวลาเริ่ม</div>
+  <div class="cp-stepsub">${escapeHtml(b.service.name)} · ${dateFull(dayDate)}${b.staff ? ' · ' + escapeHtml(b.staff) : ' · ระบบเลือกช่างว่างให้'}</div>
+  <div class="cp-legend">
+    <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--white);border:2px solid var(--forest-500);"></div>เลือกได้</div>
+    <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--danger-500);"></div>ไม่ว่าง</div>
+    <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--bone-400);"></div>เวลาไม่พอ</div>
+  </div>
+  <div class="cp-gridwrap">
+    <div class="cp-grid">
+      <div class="cp-grid-row"><div class="cp-corner"></div>${cols}</div>
+      ${rowsHtml}
+    </div>
+  </div>
+  ${b.startTime ? `<div style="padding:6px 20px;"><div class="cp-card tone-sage"><div class="cp-info-row">${ICONS.clock}<div>เลือกเวลา <b>${b.startTime}</b> น. ${b.staff ? 'กับ ' + escapeHtml(b.staff) : ''} — กด “ถัดไป” เพื่อกรอกข้อมูลติดต่อ</div></div></div></div>` : ''}
+  `;
+}
+
+function renderStepContact() {
+  const b = state.booking;
+  const c = b.contact;
+  return `
+  <div class="cp-steptitle">ข้อมูลติดต่อ</div>
+  <div class="cp-stepsub">${escapeHtml(b.service.name)} · ${b.startTime} น. ${b.staff ? '· ' + escapeHtml(b.staff) : ''}</div>
+  <div class="cp-form">
+    <div class="cp-field"><label>ชื่อเจ้าของ *</label><input id="f-name" value="${escapeHtml(c.name)}" placeholder="เช่น คุณสมชาย"></div>
+    <div class="cp-field"><label>เบอร์โทร *</label><input id="f-phone" value="${escapeHtml(c.phone)}" placeholder="08x-xxx-xxxx" inputmode="tel"></div>
+    <div class="cp-field"><label>ชื่อสัตว์เลี้ยง</label><input id="f-petname" value="${escapeHtml(c.petName)}" placeholder="เช่น มะลิ"></div>
+    <div class="cp-field"><label>ประเภทสัตว์เลี้ยง</label><input id="f-pettype" value="${escapeHtml(c.petType)}" placeholder="เช่น เฟรนช์บูลด็อก, แมวเปอร์เซีย"></div>
+    <div class="cp-field"><label>หมายเหตุ</label><textarea id="f-notes" placeholder="แจ้งอาการพิเศษ/ความต้องการเพิ่มเติม (ถ้ามี)">${escapeHtml(c.notes)}</textarea></div>
+    ${b.submitError ? `<div class="cp-error-text">${escapeHtml(b.submitError)}</div>` : ''}
+  </div>`;
+}
+
+function renderBookingSuccess() {
+  const r = state.booking.result;
+  return `
+  <div class="cp-success cp-fadein">
+    <div class="cp-success-icon">${ICONS.check}</div>
+    <h3>จองคิวสำเร็จ</h3>
+    <p style="font-size:13.5px;color:var(--text-muted);">บันทึกเลขที่การจองไว้ หากต้องการยกเลิก/เปลี่ยนแปลง ทักแชท LINE ของร้านพร้อมแจ้งเลขที่นี้</p>
+    <div class="cp-receipt">
+      <div class="cp-receipt-row"><span class="k">เลขที่การจอง</span><span class="v">${escapeHtml(r.bookingId)}</span></div>
+      <div class="cp-receipt-row"><span class="k">บริการ</span><span class="v">${escapeHtml(r.service)}</span></div>
+      <div class="cp-receipt-row"><span class="k">วันที่</span><span class="v">${escapeHtml(dateFull(parseYMD(r.date)))}</span></div>
+      <div class="cp-receipt-row"><span class="k">เวลา</span><span class="v">${escapeHtml(r.startTime)}–${escapeHtml(r.endTime)} น.</span></div>
+      <div class="cp-receipt-row"><span class="k">ช่าง</span><span class="v">${escapeHtml(r.staff)}</span></div>
+    </div>
+    <button class="cp-btn primary full lg" id="btn-book-again">จองคิวเพิ่ม</button>
+  </div>`;
+}
+
+function computeCanNext() {
+  const bk = state.booking;
+  if (bk.step === 1) return !!bk.service;
+  if (bk.step === 2) return true;
+  if (bk.step === 3) return !!bk.startTime;
+  if (bk.step === 4) return !!(bk.contact.name.trim() && bk.contact.phone.trim());
+  return false;
+}
+
+function renderFooter() {
+  const b = brand();
+  if (state.error || state.loading) return '';
+  if (state.tab === 'check') {
+    return `
+    <div class="cp-footer">
+      <div class="cp-footer-note">ตารางนี้ดูได้อย่างเดียว หากต้องการจองทันทีให้ไปที่แท็บ “จองคิวเลย” หรือทักแชท LINE</div>
+      <button class="cp-btn primary full lg" id="btn-line">สอบถามคิวผ่าน LINE ${ICONS.arrowRight}</button>
+    </div>`;
+  }
+  const bk = state.booking;
+  if (bk.step === 5) return '';
+  const canNext = computeCanNext();
+  const nextLabel = bk.step === 4 ? (bk.submitting ? 'กำลังจอง...' : 'ยืนยันการจอง') : 'ถัดไป';
+  return `
+  <div class="cp-footer">
+    <div class="cp-footer-row">
+      ${bk.step > 1 ? `<button class="cp-btn secondary lg" id="btn-back">${ICONS.chevronLeft} ย้อนกลับ</button>` : ''}
+      <button class="cp-btn primary lg ${bk.step === 1 ? 'full' : ''}" id="btn-next" ${canNext ? '' : 'disabled'} style="${bk.step > 1 ? 'flex:1' : ''}">${nextLabel} ${bk.step !== 4 ? ICONS.arrowRight : ''}</button>
+    </div>
+  </div>`;
+}
+
+function bindEvents() {
+  const app = document.getElementById('app');
+
+  const refreshBtn = document.getElementById('btn-refresh');
+  if (refreshBtn) refreshBtn.onclick = () => loadSchedule(false);
+
+  const retryBtn = document.getElementById('btn-retry');
+  if (retryBtn) retryBtn.onclick = () => loadSchedule(false);
+
+  app.querySelectorAll('[data-tab]').forEach(el => {
+    el.onclick = () => { state.tab = el.getAttribute('data-tab'); render(); };
+  });
+
+  app.querySelectorAll('[data-action="select-day"]').forEach(el => {
+    el.onclick = () => { state.selectedDayIndex = Number(el.getAttribute('data-index')); render(); };
+  });
+
+  app.querySelectorAll('[data-action="pick-service"]').forEach(el => {
+    el.onclick = () => {
+      const i = Number(el.getAttribute('data-index'));
+      state.booking.service = (brand().services || FALLBACK.services)[i];
+      state.booking.step = 2;
+      render();
+    };
+  });
+
+  app.querySelectorAll('[data-action="pick-day"]').forEach(el => {
+    el.onclick = () => { state.booking.dayIndex = Number(el.getAttribute('data-index')); state.booking.startTime = null; render(); };
+  });
+
+  app.querySelectorAll('[data-action="pick-staff"]').forEach(el => {
+    el.onclick = () => { state.booking.staff = el.getAttribute('data-staff') || ''; state.booking.startTime = null; render(); };
+  });
+
+  app.querySelectorAll('[data-action="pick-time"]').forEach(el => {
+    el.onclick = () => {
+      state.booking.startTime = el.getAttribute('data-time');
+      if (!state.booking.staff) state.booking.staff = el.getAttribute('data-staff');
+      render();
+    };
+  });
+
+  const lineBtn = document.getElementById('btn-line');
+  if (lineBtn) lineBtn.onclick = openLine;
+
+  const backBtn = document.getElementById('btn-back');
+  if (backBtn) backBtn.onclick = () => { state.booking.step -= 1; render(); };
+
+  const nextBtn = document.getElementById('btn-next');
+  if (nextBtn) nextBtn.onclick = onNextStep;
+
+  const bookAgainBtn = document.getElementById('btn-book-again');
+  if (bookAgainBtn) bookAgainBtn.onclick = () => { state.booking = freshBooking(); render(); };
+
+  ['f-name','f-phone','f-petname','f-pettype','f-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.oninput = () => {
+      const map = { 'f-name':'name','f-phone':'phone','f-petname':'petName','f-pettype':'petType','f-notes':'notes' };
+      state.booking.contact[map[id]] = el.value;
+      const nextBtn = document.getElementById('btn-next');
+      if (nextBtn) nextBtn.disabled = !computeCanNext();
+    };
+  });
+}
+
+function onNextStep() {
+  const b = state.booking;
+  if (b.step === 4) { submitBooking(); return; }
+  b.step += 1;
+  render();
+}
+
+function submitBooking() {
+  const b = state.booking;
+  if (!b.contact.name.trim() || !b.contact.phone.trim()) return;
+  b.submitting = true; b.submitError = null; render();
+
+  const payload = {
+    action: 'book',
+    customerName: b.contact.name.trim(),
+    phone: b.contact.phone.trim(),
+    petName: b.contact.petName.trim(),
+    petType: b.contact.petType.trim(),
+    service: b.service.name,
+    date: state.schedule.days[b.dayIndex].date,
+    startTime: b.startTime,
+    staff: b.staff || '',
+    notes: b.contact.notes.trim()
+  };
+
+  if (!APPS_SCRIPT_URL) {
+    setTimeout(() => {
+      b.submitting = false;
+      b.result = {
+        bookingId: 'DEMO-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
+        service: payload.service, date: payload.date, startTime: payload.startTime,
+        endTime: minutesToTime(timeToMinutes(payload.startTime) + b.service.durationMinutes),
+        staff: payload.staff || state.schedule.staffList[0]
+      };
+      b.step = 5;
+      toast('นี่คือโหมดตัวอย่าง — ยังไม่ได้บันทึกลง Google Sheet จริง');
+      render();
+    }, 500);
+    return;
+  }
+
+  fetch(APPS_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) })
+    .then(r => r.json())
+    .then(json => {
+      b.submitting = false;
+      if (!json.ok) { b.submitError = json.error || 'จองไม่สำเร็จ กรุณาลองใหม่'; render(); return; }
+      b.result = json;
+      b.step = 5;
+      render();
+      loadSchedule(true);
+    })
+    .catch(() => { b.submitting = false; b.submitError = 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่'; render(); });
+}
+
+function openLine() {
+  const b = brand();
+  const message = 'สวัสดีค่ะ/ครับ สนใจสอบถามคิวว่างของทางร้านค่ะ/ครับ';
+  const url = 'https://line.me/R/oaMessage/' + encodeURIComponent(b.lineOaId || FALLBACK.lineOaId) + '/?' + encodeURIComponent(message);
+  window.open(url, '_blank', 'noopener');
+}
+
+loadSchedule(false);
+</script>
+</body>
+</html>
