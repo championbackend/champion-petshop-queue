@@ -1,6 +1,6 @@
 /**
  * Champion Petshop — ระบบจองคิวอาบน้ำ/ตัดขนสัตว์เลี้ยง
- * Google Apps Script Web App (แบ็กเอนด์ API) ทำงานคู่กับ Google Sheet
+ * Google Apps Script Web App (backend API) ทำงานคู่กับ Google Sheet
  *
  * ============================================================
  * วิธีติดตั้ง (สรุปสั้น ๆ — รายละเอียดเต็มอยู่ในคู่มือแยกต่างหาก)
@@ -163,11 +163,23 @@ function getSettings() {
   if (map.Tagline) out.tagline = map.Tagline;
   if (map.HoursText) out.hoursText = map.HoursText;
   if (map.LineOaId) out.lineOaId = map.LineOaId;
-  if (map.OpenTime) out.openTime = map.OpenTime;
-  if (map.CloseTime) out.closeTime = map.CloseTime;
+  if (map.OpenTime) out.openTime = normalizeTimeSetting(map.OpenTime, DEFAULTS.openTime);
+  if (map.CloseTime) out.closeTime = normalizeTimeSetting(map.CloseTime, DEFAULTS.closeTime);
   if (map.SlotMinutes) out.slotMinutes = Number(map.SlotMinutes);
   if (map.DaysAhead) out.daysAhead = Number(map.DaysAhead);
   return out;
+}
+
+// แปลงค่าเวลาจาก Settings ให้เป็นสตริง 'HH:MM' เสมอ: ถ้า Sheets แปลงเซลล์เป็นเวลา/วันที่อัตโนมัติ (Date object)
+// จะดึง HH:MM ออกมาแทนที่จะเอามาตีความตรงๆ ถ้าแปลงไม่ได้ จะใช้ค่า default แทน เพื่อกันการคำนวณช่วงเวลาพังเกิด NaN
+function normalizeTimeSetting(v, fallback) {
+  if (v instanceof Date) {
+    var h = v.getHours(), m = v.getMinutes();
+    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+  }
+  var s = String(v).trim();
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+  return fallback;
 }
 
 function getStaffList() {
