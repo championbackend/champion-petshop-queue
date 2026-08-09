@@ -26,7 +26,7 @@ var DEFAULTS = {
   shopName: 'Champion Petshop',
   tagline: 'จองคิวอาบน้ำ-ตัดขน',
   hoursText: '10:00–20:00 น. ทุกวัน',
-  lineOaId: '@championpetshop',
+  lineOaId: '@413utlzb',
   openTime: '10:00',
   closeTime: '20:00',
   slotMinutes: 30,

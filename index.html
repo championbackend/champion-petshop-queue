@@ -176,13 +176,23 @@ input,select,textarea{font-family:inherit;font-size:15px}
 </div>
 
 <script>
-const APPS_SCRIPT_URL = '';
+/* ==========================================================================
+   Champion Petshop — เว็บแอพเช็กคิว + จองคิวอาบน้ำ/ตัดขนสัตว์เลี้ยง
+   ต่อยอดจากดีไซน์ต้นฉบับใน Claude Design (Pet Queue Checker)
+
+   วิธีเชื่อมกับ Google Sheet จริง:
+   1. ตั้งค่า Google Sheet + Apps Script ตามคู่มือ (ไฟล์ Code.gs)
+   2. คัดลอก URL ที่ได้จาก Deploy > Web app (ลงท้ายด้วย /exec)
+   3. วางแทนค่าว่างด้านล่างนี้
+   ถ้าเว้นว่างไว้ แอพจะโชว์ "ข้อมูลจำลอง" ให้พรีวิวได้โดยไม่ต้องต่อ Sheet
+   ========================================================================== */
+const APPS_SCRIPT_URL = ''; // <-- วาง URL ของ Apps Script Web App (/exec) ตรงนี้
 
 const FALLBACK = {
   shopName: 'Champion Petshop',
   tagline: 'จองคิวอาบน้ำ-ตัดขน',
   hoursText: '10:00–20:00 น. ทุกวัน',
-  lineOaId: '@championpetshop',
+  lineOaId: '@413utlzb',
   openTime: '10:00',
   closeTime: '20:00',
   slotMinutes: 30,
@@ -208,6 +218,7 @@ const ICONS = {
   clock: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
 };
 
+/* ---------------------------------------------------------------- state */
 const state = {
   loading: true,
   error: false,
@@ -233,6 +244,7 @@ function freshBooking() {
   };
 }
 
+/* ---------------------------------------------------------------- data */
 function loadSchedule(background) {
   if (!background) { state.loading = true; state.error = false; render(); }
   if (APPS_SCRIPT_URL) {
@@ -296,6 +308,7 @@ function generateMockSchedule() {
 
 function seededRandom(seed) { const x = Math.sin(seed) * 10000; return x - Math.floor(x); }
 
+/* ---------------------------------------------------------------- helpers */
 function timeToMinutes(t) { const p = String(t).split(':'); return Number(p[0]) * 60 + Number(p[1] || 0); }
 function minutesToTime(m) { const h = Math.floor(m / 60), mm = m % 60; return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); }
 function formatDateYMD(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -316,6 +329,7 @@ function toast(msg) {
   setTimeout(() => el.remove(), 2400);
 }
 
+/* ---------------------------------------------------------------- render root */
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = renderHeader() + renderTabs() + renderBody() + renderFooter();
@@ -375,6 +389,7 @@ function renderLoadingState() {
   </div>`;
 }
 
+/* ---------------------------------------------------------------- check tab */
 function renderCheckTab() {
   const sc = state.schedule;
   const days = sc.days;
@@ -442,6 +457,7 @@ function renderDayPills(days, selectedIndex, action) {
   }).join('');
 }
 
+/* ---------------------------------------------------------------- book tab */
 function renderBookTab() {
   const b = state.booking;
   if (b.step === 5 && b.result) return renderBookingSuccess();
@@ -586,6 +602,7 @@ function renderBookingSuccess() {
   </div>`;
 }
 
+/* ---------------------------------------------------------------- footer */
 function computeCanNext() {
   const bk = state.booking;
   if (bk.step === 1) return !!bk.service;
@@ -618,6 +635,7 @@ function renderFooter() {
   </div>`;
 }
 
+/* ---------------------------------------------------------------- events */
 function bindEvents() {
   const app = document.getElementById('app');
 
@@ -677,6 +695,7 @@ function bindEvents() {
     if (el) el.oninput = () => {
       const map = { 'f-name':'name','f-phone':'phone','f-petname':'petName','f-pettype':'petType','f-notes':'notes' };
       state.booking.contact[map[id]] = el.value;
+      // update the next/submit button live without a full re-render (would steal input focus)
       const nextBtn = document.getElementById('btn-next');
       if (nextBtn) nextBtn.disabled = !computeCanNext();
     };
@@ -709,6 +728,7 @@ function submitBooking() {
   };
 
   if (!APPS_SCRIPT_URL) {
+    // โหมดตัวอย่าง — ยังไม่เชื่อมต่อ Google Sheet จริง
     setTimeout(() => {
       b.submitting = false;
       b.result = {
@@ -739,11 +759,11 @@ function submitBooking() {
 
 function openLine() {
   const b = brand();
-  const message = 'สวัสดีค่ะ/ครับ สนใจสอบถามคิวว่างของทางร้านค่ะ/ครับ';
-  const url = 'https://line.me/R/oaMessage/' + encodeURIComponent(b.lineOaId || FALLBACK.lineOaId) + '/?' + encodeURIComponent(message);
+  const url = 'https://line.me/R/ti/p/' + encodeURIComponent(b.lineOaId || FALLBACK.lineOaId);
   window.open(url, '_blank', 'noopener');
 }
 
+/* ---------------------------------------------------------------- init */
 loadSchedule(false);
 </script>
 </body>
