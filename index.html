@@ -106,6 +106,8 @@ input,select,textarea{font-family:inherit;font-size:15px}
 .cp-cell.valid-start:hover{background:var(--sage-100);transform:scale(1.06)}
 .cp-cell.valid-start.picked{background:var(--forest-500);border-color:var(--forest-500)}
 .cp-cell.unavailable-for-duration{background:var(--bone-400);border-color:var(--bone-400)}
+.cp-cell.clickable{cursor:pointer}
+.cp-cell.clickable:hover{background:var(--sage-100);border-color:var(--forest-400);transform:scale(1.06)}
 .cp-corner{width:82px;flex:0 0 82px;position:sticky;left:0;background:var(--surface-page)}
 
 /* buttons */
@@ -237,11 +239,48 @@ function freshBooking() {
     dayIndex: 0,
     staff: '',
     startTime: null,
+    quickPick: false,
     contact: { name: '', phone: '', petName: '', petType: '', notes: '' },
     submitting: false,
     submitError: null,
     result: null
   };
+}
+
+/* start a booking directly from a slot clicked on the check-queue grid,
+   skipping straight to service selection with day/staff/time pre-filled */
+function startQuickBooking(dayIndex, staffName, startTime) {
+  state.booking = freshBooking();
+  state.booking.dayIndex = dayIndex;
+  state.booking.staff = staffName;
+  state.booking.startTime = startTime;
+  state.booking.quickPick = true;
+  state.booking.step = 1;
+  state.tab = 'book';
+  render();
+}
+
+/* check whether a pre-picked day/staff/startTime can fit a given service's duration */
+function isSlotValidForService(dayIndex, staffName, startTime, service) {
+  const sc = state.schedule;
+  if (!sc || !service) return false;
+  const day = sc.days[dayIndex];
+  if (!day) return false;
+  const slotMinutes = sc.slotMinutes || 30;
+  const durationSlots = Math.ceil(service.durationMinutes / slotMinutes);
+  const startIdx = day.slots.findIndex(s => s.start === startTime);
+  if (startIdx === -1 || startIdx + durationSlots > day.slots.length) return false;
+  const now = new Date();
+  const dayDate = parseYMD(day.date);
+  const isToday = isSameDate(dayDate, now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  for (let k = startIdx; k < startIdx + durationSlots; k++) {
+    const slot = day.slots[k];
+    const raw = slot.staff[staffName];
+    const isPast = isToday && timeToMinutes(slot.start) <= nowMinutes;
+    if (raw === 'closed' || raw === 'booked' || isPast) return false;
+  }
+  return true;
 }
 
 /* ---------------------------------------------------------------- data */
@@ -407,7 +446,9 @@ function renderCheckTab() {
       let status = isPast ? 'past' : (raw === 'closed' ? 'closed' : (raw === 'booked' ? 'booked' : 'available'));
       if (status === 'available') totalAvailable++;
       const label = status === 'available' ? 'ว่าง' : status === 'booked' ? 'ไม่ว่าง' : status === 'closed' ? 'หยุด' : 'ผ่านไปแล้ว';
-      return `<div class="cp-cell ${status !== 'available' ? status : ''}" title="${name} ${s.start} — ${label}"></div>`;
+      const clickable = status === 'available';
+      const attrs = clickable ? `data-action="quick-pick" data-staff="${escapeHtml(name)}" data-time="${s.start}"` : '';
+      return `<button class="cp-cell ${clickable ? 'clickable' : status}" ${attrs} ${clickable ? '' : 'disabled tabindex="-1"'} title="${name} ${s.start} — ${label}"></button>`;
     }).join('');
     return `<div class="cp-grid-row"><div class="cp-rowlabel">${escapeHtml(name)}</div>${cells}</div>`;
   }).join('');
@@ -417,7 +458,7 @@ function renderCheckTab() {
   return `
   <div style="padding:16px 20px 0;">
     <div class="cp-card tone-sage">
-      <div class="cp-info-row">${ICONS.shield}<div>ตารางนี้แสดงคิวว่างเบื้องต้น กดแท็บ “จองคิวเลย” เพื่อจองผ่านเว็บได้ทันที หรือทักแชท LINE ของร้านด้านล่าง</div></div>
+      <div class="cp-info-row">${ICONS.shield}<div>กดช่องที่ว่างในตารางเพื่อจองช่วงเวลานั้นได้ทันที หรือทักแชท LINE ของร้านด้านล่าง</div></div>
     </div>
   </div>
   <div style="padding:18px 0 4px;display:flex;flex-direction:column;gap:10px;">
@@ -475,9 +516,16 @@ function renderBookTab() {
 function renderStepService() {
   const services = brand().services || FALLBACK.services;
   const b = state.booking;
+  const sc = state.schedule;
+  let quickInfo = '';
+  if (b.quickPick && sc && sc.days[b.dayIndex]) {
+    const day = sc.days[b.dayIndex];
+    quickInfo = `<div style="padding:0 20px 10px;"><div class="cp-card tone-sage"><div class="cp-info-row">${ICONS.clock}<div>เลือกช่วงเวลา <b>${b.startTime}</b> น. กับ ${escapeHtml(b.staff)} วันที่ ${dateFull(parseYMD(day.date))} — เลือกบริการเพื่อจองต่อได้เลย</div></div></div></div>`;
+  }
   return `
   <div class="cp-steptitle">เลือกบริการ</div>
   <div class="cp-stepsub">เลือกบริการที่ต้องการจองคิว</div>
+  ${quickInfo}
   <div class="cp-services">
     ${services.map((s, i) => `
       <button class="cp-service ${b.service && b.service.name === s.name ? 'selected' : ''}" data-action="pick-service" data-index="${i}">
@@ -618,7 +666,7 @@ function renderFooter() {
   if (state.tab === 'check') {
     return `
     <div class="cp-footer">
-      <div class="cp-footer-note">ตารางนี้ดูได้อย่างเดียว หากต้องการจองทันทีให้ไปที่แท็บ “จองคิวเลย” หรือทักแชท LINE</div>
+      <div class="cp-footer-note">กดช่องว่างในตารางเพื่อจองทันที หรือไปที่แท็บ "จองคิวเลย" หรือทักแชท LINE</div>
       <button class="cp-btn primary full lg" id="btn-line">สอบถามคิวผ่าน LINE ${ICONS.arrowRight}</button>
     </div>`;
   }
@@ -653,11 +701,30 @@ function bindEvents() {
     el.onclick = () => { state.selectedDayIndex = Number(el.getAttribute('data-index')); render(); };
   });
 
+  app.querySelectorAll('[data-action="quick-pick"]').forEach(el => {
+    el.onclick = () => {
+      const staffName = el.getAttribute('data-staff');
+      const time = el.getAttribute('data-time');
+      startQuickBooking(state.selectedDayIndex, staffName, time);
+    };
+  });
+
   app.querySelectorAll('[data-action="pick-service"]').forEach(el => {
     el.onclick = () => {
       const i = Number(el.getAttribute('data-index'));
-      state.booking.service = (brand().services || FALLBACK.services)[i];
-      state.booking.step = 2;
+      const svc = (brand().services || FALLBACK.services)[i];
+      const b = state.booking;
+      b.service = svc;
+      if (b.quickPick) {
+        if (b.startTime && isSlotValidForService(b.dayIndex, b.staff, b.startTime, svc)) {
+          b.step = 4;
+        } else {
+          b.startTime = null;
+          b.step = 3;
+        }
+      } else {
+        b.step = 2;
+      }
       render();
     };
   });
@@ -682,7 +749,12 @@ function bindEvents() {
   if (lineBtn) lineBtn.onclick = openLine;
 
   const backBtn = document.getElementById('btn-back');
-  if (backBtn) backBtn.onclick = () => { state.booking.step -= 1; render(); };
+  if (backBtn) backBtn.onclick = () => {
+    const b = state.booking;
+    if (b.quickPick && (b.step === 3 || b.step === 4)) { b.step = 1; }
+    else { b.step -= 1; }
+    render();
+  };
 
   const nextBtn = document.getElementById('btn-next');
   if (nextBtn) nextBtn.onclick = onNextStep;
