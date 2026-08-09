@@ -173,7 +173,7 @@ function getSettings() {
 // แปลงค่าเวลาจาก Settings ให้เป็นสตริง 'HH:MM' เสมอ: ถ้า Sheets แปลงเซลล์เป็นเวลา/วันที่อัตโนมัติ (Date object)
 // จะดึง HH:MM ออกมาแทนที่จะเอามาตีความตรงๆ ถ้าแปลงไม่ได้ จะใช้ค่า default แทน เพื่อกันการคำนวณช่วงเวลาพังเกิด NaN
 function normalizeTimeSetting(v, fallback) {
-  if (v instanceof Date) {
+  if (v && typeof v.getHours === 'function' && typeof v.getMinutes === 'function') {
     var h = v.getHours(), m = v.getMinutes();
     return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
   }
@@ -214,7 +214,7 @@ function getActiveBookingsInRange(startDate, endDate) {
     var status = row[idx.Status];
     if (status !== STATUS_ACTIVE && status !== STATUS_BLOCKED) return;
     var d = row[idx.Date];
-    var dateObj = (d instanceof Date) ? d : new Date(d);
+    var dateObj = toDateObj(d);
     if (dateObj < startDate || dateObj > endDate) return;
     out.push({
       date: formatDateYMD(dateObj),
@@ -429,7 +429,7 @@ function readAllBookings(sh) {
   var data = sh.getRange(2, 1, numRows, BOOKING_HEADERS.length).getValues();
   return data.map(function (row) {
     var d = row[idx.Date];
-    var dateObj = (d instanceof Date) ? d : new Date(d);
+    var dateObj = toDateObj(d);
     return {
       bookingId: row[idx.BookingID],
       date: formatDateYMD(dateObj),
@@ -457,11 +457,25 @@ function minutesToTime(m) {
   return (h < 10 ? '0' + h : h) + ':' + (mm < 10 ? '0' + mm : mm);
 }
 
+// แปลงค่าจาก Sheet ให้เป็น Date object เสมอ: ใช้ duck-typing (มีเมธอด getFullYear ไหม)
+// แทน instanceof Date ด้วยเหตุผลเดียวกับ normalizeTime — ถ้าไม่ใช่ ให้ลองสร้าง new Date(v) ใหม่
+function toDateObj(v) {
+  if (v && typeof v.getFullYear === 'function') return v;
+  return new Date(v);
+}
+
 function normalizeTime(v) {
-  if (v instanceof Date) {
-    return (v.getHours() < 10 ? '0' + v.getHours() : v.getHours()) + ':' + (v.getMinutes() < 10 ? '0' + v.getMinutes() : v.getMinutes());
+  // ใช้ duck-typing (เช็คว่ามีเมธอด getHours/getMinutes) แทน instanceof Date
+  // เพราะค่าที่ได้จาก Range#getValues() ของ Apps Script บางครั้งเป็นอ็อบเจกต์แบบวันที่
+  // แต่ไม่ผ่าน instanceof Date (มาจากคนละ realm) ทำให้ String(v) ออกมาเป็น
+  // "Sat Dec 30 1899 10:00:00 GMT+xxxx" แทนที่จะเป็น "10:00" และพังตอนคำนวณช่วงเวลา
+  if (v && typeof v.getHours === 'function' && typeof v.getMinutes === 'function') {
+    var h = v.getHours(), m = v.getMinutes();
+    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
   }
-  return String(v);
+  var s = String(v).trim();
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+  return s;
 }
 
 function formatDateYMD(date) {
