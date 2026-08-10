@@ -67,6 +67,8 @@ function setupSheets() {
     bookings.appendRow(BOOKING_HEADERS);
     bookings.setFrozenRows(1);
   }
+  // บังคับคอลัมน์เบอร์โทรทั้งคอลัมน์ให้เป็นข้อความ กันเลข 0 หน้าเบอร์หายเวลา Sheets ตีความเป็นตัวเลข
+  bookings.getRange(2, BOOKING_HEADERS.indexOf('Phone') + 1, 998, 1).setNumberFormat('@');
 
   var services = ss.getSheetByName(SHEET_NAMES.services) || ss.insertSheet(SHEET_NAMES.services);
   if (services.getLastRow() === 0) {
@@ -135,11 +137,9 @@ function doPost(e) {
     var body = JSON.parse(raw);
     var action = body.action || 'book';
 
-    if (action === 'book') {
-      return jsonOut(createBooking(body));
-    }
-    if (action === 'cancel') {
-      return jsonOut(cancelBooking(body));
+    // ปิดการจอง/ยกเลิกด้วยตนเองของลูกค้าผ่าน API สาธารณะแล้ว — ให้เจ้าหน้าที่ทำผ่านหน้าเจ้าหน้าที่ (staff dashboard) แทน
+    if (action === 'book' || action === 'cancel') {
+      return jsonOut({ ok: false, error: 'ปิดการจอง/ยกเลิกด้วยตนเองแล้ว กรุณาติดต่อร้านผ่าน LINE' });
     }
     return jsonOut({ error: 'unknown action: ' + action });
   } catch (err) {
@@ -386,6 +386,10 @@ function createBooking(body) {
       notes
     ]);
 
+    // บังคับให้เซลล์เบอร์โทรของแถวนี้เป็นข้อความเสมอ กัน Sheets ตัดเลข 0 หน้าเบอร์ทิ้ง (ตีความเป็นตัวเลข)
+    var newRow = sh.getLastRow();
+    sh.getRange(newRow, headerIndexMap().Phone + 1).setNumberFormat('@').setValue(phone);
+
     return {
       ok: true,
       bookingId: bookingId,
@@ -422,7 +426,7 @@ function cancelBooking(body) {
         return { ok: true, bookingId: bookingId };
       }
     }
-    return { ok: false, error: 'ไม่พบการจองนี้ หรือถูกยกเลิกไปแล้ว' };
+    return { ok: false, error: 'ไม่พบการจองนี้ หรีอถูกยกเลิกไปแล้ว' };
   } finally {
     lock.releaseLock();
   }
@@ -539,6 +543,29 @@ function staffCancelBooking(bookingId) {
   }
 }
 
+// เจ้าหน้าที่จองคิวใหม่แทนลูกค้า (ใช้ฟังก์ชัน createBooking เดิมทุกอย่าง แค่เช็คสิทธิ์ก่อน)
+function staffCreateBooking(body) {
+  if (!isAuthorizedStaff()) {
+    throw new Error('ไม่มีสิทธิ์เข้าถึง');
+  }
+  return createBooking(body);
+}
+
+// ข้อมูลตัวเลือกสำหรับฟอร์มจองคิวของเจ้าหน้าที่ (รายการบริการ/ช่าง/เวลาเปิด-ปิดร้าน)
+function staffGetFormOptions() {
+  if (!isAuthorizedStaff()) {
+    throw new Error('ไม่มีสิทธิ์เข้าถึง');
+  }
+  var settings = getSettings();
+  return {
+    services: getServices(),
+    staffList: getStaffList(),
+    openTime: settings.openTime,
+    closeTime: settings.closeTime,
+    slotMinutes: settings.slotMinutes
+  };
+}
+
 function escapeHtmlGs(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -585,23 +612,62 @@ function buildStaffHtml(email, authorized) {
     '.tablewrap{overflow:auto;max-height:70vh;border-radius:12px;}' +
     '.empty{padding:40px;text-align:center;color:#5A5650;}' +
     '.me{font-size:12px;color:#5A5650;}' +
+    '.modal-overlay{position:fixed;inset:0;background:rgba(28,27,25,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}' +
+    '.modal{background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:22px;}' +
+    '.modal h2{font-size:17px;margin:0 0 14px;}' +
+    '.modal .field{margin-bottom:12px;}' +
+    '.modal label{display:block;font-size:12.5px;font-weight:700;color:#5A5650;margin-bottom:5px;}' +
+    '.modal input,.modal select,.modal textarea{width:100%;padding:9px 11px;border:1.5px solid #D9D7D2;border-radius:8px;font-size:14px;box-sizing:border-box;font-family:inherit;}' +
+    '.modal textarea{resize:vertical;}' +
+    '.modal .row2{display:flex;gap:10px;}' +
+    '.modal .row2>.field{flex:1;}' +
+    '.modal .hint{font-size:11.5px;color:#9A948B;margin-top:8px;}' +
+    '.modal .err{color:#C0553F;font-size:12.5px;margin-bottom:10px;display:none;}' +
+    '.modal .actions{display:flex;gap:10px;margin-top:6px;}' +
+    '.modal .actions button{flex:1;}' +
     '</style></head><body><div class="wrap">' +
     '<h1>Champion Petshop — หน้าเจ้าหน้าที่</h1>' +
     '<div class="sub">รายการจองทั้งหมด (ไม่ต้องเปิด Google Sheet) · เข้าสู่ระบบเป็น <span class="me">' + escapeHtmlGs(email) + '</span></div>' +
     '<div class="toolbar">' +
     '<input type="text" id="q" placeholder="ค้นหา: ชื่อ / เบอร์โทร / เลขที่การจอง">' +
     '<button class="ghost" id="btn-refresh">รีเฟรช</button>' +
+    '<button id="btn-new-booking">+ จองคิวใหม่</button>' +
     '<span id="count" style="font-size:12.5px;color:#5A5650;"></span>' +
     '</div>' +
     '<div id="tablewrap" class="tablewrap"><div class="empty">กำลังโหลด...</div></div>' +
     '</div>' +
+    '<div id="booking-modal" class="modal-overlay" style="display:none;">' +
+    '<div class="modal">' +
+    '<h2 id="modal-title">จองคิวใหม่</h2>' +
+    '<div id="modal-err" class="err"></div>' +
+    '<div class="field"><label>บริการ</label><select id="m-service"></select></div>' +
+    '<div class="row2">' +
+    '<div class="field"><label>วันที่</label><input type="date" id="m-date"></div>' +
+    '<div class="field"><label>เวลาเริ่ม</label><input type="time" id="m-start"></div>' +
+    '</div>' +
+    '<div class="field"><label>ช่าง</label><select id="m-staff"></select></div>' +
+    '<div class="field"><label>ชื่อลูกค้า</label><input type="text" id="m-name" placeholder="เช่น คุณางฉาย"></div>' +
+    '<div class="field"><label>เบอร์โทร</label><input type="text" id="m-phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>' +
+    '<div class="row2">' +
+    '<div class="field"><label>ชื่อสัตว์เลี้ยง</label><input type="text" id="m-petname"></div>' +
+    '<div class="field"><label>ประเภทสัตว์เลี้ยง</label><input type="text" id="m-pettype"></div>' +
+    '</div>' +
+    '<div class="field"><label>หมายเหตุ</label><textarea id="m-notes" rows="2"></textarea></div>' +
+    '<div id="modal-hint" class="hint"></div>' +
+    '<div class="actions">' +
+    '<button class="ghost" id="btn-modal-cancel">ยกเลิก</button>' +
+    '<button id="btn-modal-submit">บันทึกการจอง</button>' +
+    '</div>' +
+    '</div>' +
+    '</div>' +
     '<script>' +
     'var ALL = [];' +
+    'var FORM = { services: [], staffList: [], openTime: "", closeTime: "", slotMinutes: 30 };' +
     'function load(){ google.script.run.withSuccessHandler(onData).withFailureHandler(onError).staffGetBookings(); }' +
     'function onError(e){ document.getElementById("tablewrap").innerHTML = "<div class=empty>โหลดไม่สำเร็จ: " + (e && e.message ? e.message : e) + "</div>"; }' +
     'function onData(list){ ALL = list || []; renderTable(); }' +
     'function statusClass(s){ if (s === "จอง") return "status-active"; if (s === "ปิด") return "status-blocked"; return "status-cancelled"; }' +
-    'function esc(s){ return String(s == null ? "" : s).replace(/[&<>"\x27]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\x27":"&#39;"}[c]; }); }' +
+    'function esc(s){ return String(s == null ? "" : s).replace(/[&<>"\\x27]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\\x27":"&#39;"}[c]; }); }' +
     'function renderTable(){' +
     '  var q = (document.getElementById("q").value || "").trim().toLowerCase();' +
     '  var rows = ALL.filter(function(b){ if (!q) return true; return [b.bookingId,b.customerName,b.phone,b.petName,b.staff].join(" ").toLowerCase().indexOf(q) !== -1; });' +
@@ -609,10 +675,10 @@ function buildStaffHtml(email, authorized) {
     '  if (!rows.length){ document.getElementById("tablewrap").innerHTML = "<div class=empty>ไม่พบรายการ</div>"; return; }' +
     '  var html = "<table><thead><tr><th>วันที่</th><th>เวลา</th><th>ช่าง</th><th>สถานะ</th><th>ลูกค้า</th><th>เบอร์โทร</th><th>สัตว์เลี้ยง</th><th>บริการ</th><th>เลขที่จอง</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>";' +
     '  rows.forEach(function(b){' +
-    '    html += "<tr><td>" + esc(b.date) + "</td><td>" + esc(b.startTime) + "–" + esc(b.endTime) + "</td><td>" + esc(b.staff) + "</td>" +' +
+    '    html += "<tr><td>" + esc(b.date) + "</td><td>" + esc(b.startTime) + "\u2013" + esc(b.endTime) + "</td><td>" + esc(b.staff) + "</td>" +' +
     '      "<td class=" + statusClass(b.status) + ">" + esc(b.status) + "</td><td>" + esc(b.customerName) + "</td><td>" + esc(b.phone) + "</td>" +' +
     '      "<td>" + esc(b.petName) + (b.petType ? " (" + esc(b.petType) + ")" : "") + "</td><td>" + esc(b.service) + "</td><td>" + esc(b.bookingId) + "</td>" +' +
-    '      "<td>" + esc(b.notes) + "</td><td>" + (b.status === "จอง" ? "<button class=danger data-id=\"" + esc(b.bookingId) + "\">ยกเลิก</button>" : "") + "</td></tr>";' +
+    '      "<td>" + esc(b.notes) + "</td><td>" + (b.status === "จอง" ? ("<button class=ghost data-reschedule=\\"" + esc(b.bookingId) + "\\">เปลี่ยน</button> <button class=danger data-id=\\"" + esc(b.bookingId) + "\\">ยกเลิก</button>") : "") + "</td></tr>";' +
     '  });' +
     '  html += "</tbody></table>";' +
     '  document.getElementById("tablewrap").innerHTML = html;' +
@@ -626,10 +692,79 @@ function buildStaffHtml(email, authorized) {
     '        .staffCancelBooking(btn.getAttribute("data-id"));' +
     '    };' +
     '  });' +
+    '  document.querySelectorAll("button[data-reschedule]").forEach(function(btn){' +
+    '    btn.onclick = function(){' +
+    '      var id = btn.getAttribute("data-reschedule");' +
+    '      var rec = ALL.filter(function(b){ return String(b.bookingId) === id; })[0];' +
+    '      if (!rec) return;' +
+    '      if (!confirm("จะยกเลิกคิวเดิมของ " + rec.customerName + " แล้วเปิดฟอร์มจองใหม่ให้ ยืนยันหรือไม่?")) return;' +
+    '      btn.disabled = true; btn.textContent = "กำลังยกเลิก...";' +
+    '      google.script.run.withSuccessHandler(function(res){' +
+    '        if (res && res.ok) { load(); openNewBookingModal(rec); } else { alert((res && res.error) || "ยกเลิกไม่สำเร็จ"); btn.disabled = false; btn.textContent = "เปลี่ยน"; }' +
+    '      }).withFailureHandler(function(e){ alert(e && e.message ? e.message : e); btn.disabled = false; btn.textContent = "เปลี่ยน"; })' +
+    '        .staffCancelBooking(id);' +
+    '    };' +
+    '  });' +
+    '}' +
+    'function loadFormOptions(){ google.script.run.withSuccessHandler(onFormOptions).withFailureHandler(function(){}).staffGetFormOptions(); }' +
+    'function onFormOptions(opts){' +
+    '  FORM = opts || FORM;' +
+    '  var svcSel = document.getElementById("m-service");' +
+    '  svcSel.innerHTML = FORM.services.map(function(s){ return "<option value=\\"" + esc(s.name) + "\\">" + esc(s.name) + " (" + s.durationMinutes + " นาที, ฿" + s.price + ")</option>"; }).join("");' +
+    '  var staffSel = document.getElementById("m-staff");' +
+    '  staffSel.innerHTML = "<option value=\\"\\">ไม่ระบุ (ระบบเลือกช่างว่างให้)</option>" + FORM.staffList.map(function(n){ return "<option value=\\"" + esc(n) + "\\">" + esc(n) + "</option>"; }).join("");' +
+    '  document.getElementById("modal-hint").textContent = "เวลาทำการ " + FORM.openTime + "–" + FORM.closeTime + " น. (ทีละ " + FORM.slotMinutes + " นาที)";' +
+    '}' +
+    'function openNewBookingModal(prefill){' +
+    '  document.getElementById("modal-title").textContent = prefill ? "จองคิวใหม่ (เปลี่ยนวัน-เวลา)" : "จองคิวใหม่";' +
+    '  document.getElementById("modal-err").style.display = "none";' +
+    '  document.getElementById("m-date").value = "";' +
+    '  document.getElementById("m-start").value = "";' +
+    '  document.getElementById("m-service").value = prefill ? prefill.service : "";' +
+    '  document.getElementById("m-staff").value = prefill ? prefill.staff : "";' +
+    '  document.getElementById("m-name").value = prefill ? prefill.customerName : "";' +
+    '  document.getElementById("m-phone").value = prefill ? prefill.phone : "";' +
+    '  document.getElementById("m-petname").value = prefill ? prefill.petName : "";' +
+    '  document.getElementById("m-pettype").value = prefill ? prefill.petType : "";' +
+    '  document.getElementById("m-notes").value = prefill ? prefill.notes : "";' +
+    '  document.getElementById("booking-modal").style.display = "flex";' +
+    '}' +
+    'function closeModal(){ document.getElementById("booking-modal").style.display = "none"; }' +
+    'function submitNewBooking(){' +
+    '  var payload = {' +
+    '    action: "book",' +
+    '    service: document.getElementById("m-service").value,' +
+    '    date: document.getElementById("m-date").value,' +
+    '    startTime: document.getElementById("m-start").value,' +
+    '    staff: document.getElementById("m-staff").value,' +
+    '    customerName: document.getElementById("m-name").value.trim(),' +
+    '    phone: document.getElementById("m-phone").value.trim(),' +
+    '    petName: document.getElementById("m-petname").value.trim(),' +
+    '    petType: document.getElementById("m-pettype").value.trim(),' +
+    '    notes: document.getElementById("m-notes").value.trim()' +
+    '  };' +
+    '  var errEl = document.getElementById("modal-err");' +
+    '  if (!payload.service || !payload.date || !payload.startTime || !payload.customerName || !payload.phone) {' +
+    '    errEl.textContent = "กรอกข้อมูลให้ครบ: บริการ, วันที่, เวลา, ชื่อลูกค้า, เบอร์โทร"; errEl.style.display = "block"; return;' +
+    '  }' +
+    '  var btn = document.getElementById("btn-modal-submit");' +
+    '  btn.disabled = true; btn.textContent = "กำลังบันทึก...";' +
+    '  google.script.run.withSuccessHandler(function(res){' +
+    '    btn.disabled = false; btn.textContent = "บันทึกการจอง";' +
+    '    if (res && res.ok) { closeModal(); load(); }' +
+    '    else { errEl.textContent = (res && res.error) || "จองไม่สำเร็จ"; errEl.style.display = "block"; }' +
+    '  }).withFailureHandler(function(e){' +
+    '    btn.disabled = false; btn.textContent = "บันทึกการจอง";' +
+    '    errEl.textContent = e && e.message ? e.message : String(e); errEl.style.display = "block";' +
+    '  }).staffCreateBooking(payload);' +
     '}' +
     'window.addEventListener("DOMContentLoaded", function(){' +
     '  document.getElementById("btn-refresh").onclick = load;' +
     '  document.getElementById("q").oninput = renderTable;' +
+    '  document.getElementById("btn-new-booking").onclick = function(){ openNewBookingModal(null); };' +
+    '  document.getElementById("btn-modal-cancel").onclick = closeModal;' +
+    '  document.getElementById("btn-modal-submit").onclick = submitNewBooking;' +
+    '  loadFormOptions();' +
     '  load();' +
     '});' +
     '</script></body></html>';
