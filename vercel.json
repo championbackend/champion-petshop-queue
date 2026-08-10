@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/staff",
+      "destination": "https://script.google.com/macros/s/AKfycbyL3pxbzu0zfazYKh5EoffrqLCl602uq7wfdthYuaAesYWBU5uGWfWF4XRR0HkF3qFPBg/exec?action=staff",
+      "permanent": false
+    }
+  ]
+}
