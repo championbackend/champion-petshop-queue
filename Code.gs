@@ -426,7 +426,7 @@ function cancelBooking(body) {
         return { ok: true, bookingId: bookingId };
       }
     }
-    return { ok: false, error: 'ไม่พบการจองนี้ หรีอถูกยกเลิกไปแล้ว' };
+    return { ok: false, error: 'ไม่พบการจองนี้ หรือถูกยกเลิกไปแล้ว' };
   } finally {
     lock.releaseLock();
   }
@@ -551,6 +551,89 @@ function staffCreateBooking(body) {
   return createBooking(body);
 }
 
+// เจ้าหน้าที่แก้ไขข้อมูลการจองที่มีอยู่แล้ว (เปลี่ยนวัน/เวลา/ช่าง/ข้อมูลลูกค้าได้ในที่เดียว ไม่ต้องยกเลิกแล้วจองใหม่)
+function staffUpdateBooking(bookingId, fields) {
+  if (!isAuthorizedStaff()) {
+    throw new Error('ไม่มีสิทธิ์เข้าถึง');
+  }
+  bookingId = trimStr(bookingId);
+  fields = fields || {};
+  var customerName = trimStr(fields.customerName);
+  var phone = trimStr(fields.phone);
+  var petName = trimStr(fields.petName);
+  var petType = trimStr(fields.petType);
+  var serviceName = trimStr(fields.service);
+  var date = trimStr(fields.date);
+  var startTime = trimStr(fields.startTime);
+  var staffName = trimStr(fields.staff);
+  var notes = trimStr(fields.notes);
+
+  if (!bookingId) return { ok: false, error: 'ไม่พบเลขที่การจอง' };
+  if (!customerName || !phone || !serviceName || !date || !startTime || !staffName) {
+    return { ok: false, error: 'กรอกข้อมูลไม่ครบ (ชื่อ, เบอร์โทร, บริการ, วันที่, เวลา, ช่าง)' };
+  }
+
+  var services = getServices();
+  var service = services.filter(function (s) { return s.name === serviceName; })[0];
+  if (!service) return { ok: false, error: 'ไม่พบบริการที่เลือก' };
+
+  var staffList = getStaffList();
+  if (staffList.indexOf(staffName) === -1) return { ok: false, error: 'ไม่พบช่างที่เลือก' };
+
+  var settings = getSettings();
+  var openMinutes = timeToMinutes(settings.openTime);
+  var closeMinutes = timeToMinutes(settings.closeTime);
+  var startMin = timeToMinutes(startTime);
+  var endMin = startMin + service.durationMinutes;
+  if (startMin < openMinutes || endMin > closeMinutes) {
+    return { ok: false, error: 'ช่วงเวลานี้อยู่นอกเวลาทำการของร้าน (' + settings.openTime + '–' + settings.closeTime + ')' };
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.bookings);
+    var idx = headerIndexMap();
+    var numRows = sh.getLastRow() - 1;
+    if (numRows <= 0) return { ok: false, error: 'ไม่พบการจอง' };
+    var data = sh.getRange(2, 1, numRows, BOOKING_HEADERS.length).getValues();
+    var rowIndex = -1;
+    for (var i = 0; i < data.length; i++) {
+      if (String(data[i][idx.BookingID]) === bookingId) { rowIndex = i; break; }
+    }
+    if (rowIndex === -1) return { ok: false, error: 'ไม่พบการจองนี้' };
+
+    var conflict = data.some(function (row, i) {
+      if (i === rowIndex) return false;
+      if (row[idx.Staff] !== staffName) return false;
+      var st = row[idx.Status];
+      if (st !== STATUS_ACTIVE && st !== STATUS_BLOCKED) return false;
+      var rowDate = formatDateYMD(toDateObj(row[idx.Date]));
+      if (rowDate !== date) return false;
+      var bStart = timeToMinutes(normalizeTime(row[idx.StartTime]));
+      var bEnd = timeToMinutes(normalizeTime(row[idx.EndTime]));
+      return startMin < bEnd && endMin > bStart;
+    });
+    if (conflict) return { ok: false, error: 'ช่างคนนี้ไม่ว่างในช่วงเวลาที่เลือก กรุณาเลือกเวลาหรือช่างอื่น' };
+
+    var sheetRow = rowIndex + 2;
+    sh.getRange(sheetRow, idx.Date + 1).setValue(date);
+    sh.getRange(sheetRow, idx.StartTime + 1).setValue(startTime);
+    sh.getRange(sheetRow, idx.EndTime + 1).setValue(minutesToTime(endMin));
+    sh.getRange(sheetRow, idx.Staff + 1).setValue(staffName);
+    sh.getRange(sheetRow, idx.CustomerName + 1).setValue(customerName);
+    sh.getRange(sheetRow, idx.Phone + 1).setNumberFormat('@').setValue(phone);
+    sh.getRange(sheetRow, idx.PetName + 1).setValue(petName);
+    sh.getRange(sheetRow, idx.PetType + 1).setValue(petType);
+    sh.getRange(sheetRow, idx.Service + 1).setValue(serviceName);
+    sh.getRange(sheetRow, idx.Notes + 1).setValue(notes);
+
+    return { ok: true, bookingId: bookingId };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ข้อมูลตัวเลือกสำหรับฟอร์มจองคิวของเจ้าหน้าที่ (รายการบริการ/ช่าง/เวลาเปิด-ปิดร้าน)
 function staffGetFormOptions() {
   if (!isAuthorizedStaff()) {
@@ -625,9 +708,33 @@ function buildStaffHtml(email, authorized) {
     '.modal .err{color:#C0553F;font-size:12.5px;margin-bottom:10px;display:none;}' +
     '.modal .actions{display:flex;gap:10px;margin-top:6px;}' +
     '.modal .actions button{flex:1;}' +
+    '.gtabs{display:flex;gap:8px;margin-bottom:14px;}' +
+    '.gtab-btn{background:#fff;color:#3E5A47;border:1.5px solid #D9D7D2;border-radius:999px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer;}' +
+    '.gtab-btn.active{background:#3E5A47;color:#fff;border-color:#3E5A47;}' +
+    '.daynav{display:flex;align-items:center;gap:12px;margin-bottom:10px;}' +
+    '.daynav .lbl{font-weight:700;font-size:14px;flex:1;text-align:center;}' +
+    '.daynav button:disabled{opacity:.4;cursor:not-allowed;}' +
+    '.glegend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#5A5650;}' +
+    '.gswatch{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px;}' +
+    '.gridwrap-outer{position:relative;}' +
+    '.gridwrap{overflow:auto;max-height:65vh;border-radius:12px;background:#fff;box-shadow:0 2px 6px rgba(27,38,30,.07);}' +
+    '.g-grid{display:flex;flex-direction:column;gap:3px;width:fit-content;padding:10px;}' +
+    '.g-row{display:flex;gap:3px;}' +
+    '.g-corner{width:88px;flex:0 0 88px;}' +
+    '.g-colhead{width:46px;flex:0 0 46px;font-size:10.5px;text-align:center;color:#5A5650;font-weight:700;padding-top:4px;}' +
+    '.g-rowlabel{width:88px;flex:0 0 88px;font-size:12.5px;font-weight:700;display:flex;align-items:center;padding-right:6px;position:sticky;left:0;background:#fff;}' +
+    '.g-cell{width:46px;flex:0 0 46px;height:34px;border-radius:6px;border:1.5px solid #D9D7D2;background:#fff;cursor:pointer;font-size:9.5px;padding:0 3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#fff;font-family:inherit;}' +
+    '.g-cell.g-free:hover{background:#EEF3EF;border-color:#3E5A47;}' +
+    '.g-cell.g-booked{background:#C0553F;border-color:#C0553F;}' +
+    '.g-cell.g-blocked{background:#9A948B;border-color:#9A948B;}' +
     '</style></head><body><div class="wrap">' +
     '<h1>Champion Petshop — หน้าเจ้าหน้าที่</h1>' +
-    '<div class="sub">รายการจองทั้งหมด (ไม่ต้องเปิด Google Sheet) · เข้าสู่ระบบเป็น <span class="me">' + escapeHtmlGs(email) + '</span></div>' +
+    '<div class="sub">จัดการคิวทั้งหมด (ไม่ต้องเปิด Google Sheet) · เข้าสู่ระบบเป็น <span class="me">' + escapeHtmlGs(email) + '</span></div>' +
+    '<div class="gtabs">' +
+    '<button type="button" class="gtab-btn active" id="tab-btn-list">รายการทั้งหมด</button>' +
+    '<button type="button" class="gtab-btn" id="tab-btn-grid">ตารางคิว 10 วัน</button>' +
+    '</div>' +
+    '<div id="panel-list">' +
     '<div class="toolbar">' +
     '<input type="text" id="q" placeholder="ค้นหา: ชื่อ / เบอร์โทร / เลขที่การจอง">' +
     '<button class="ghost" id="btn-refresh">รีเฟรช</button>' +
@@ -635,6 +742,20 @@ function buildStaffHtml(email, authorized) {
     '<span id="count" style="font-size:12.5px;color:#5A5650;"></span>' +
     '</div>' +
     '<div id="tablewrap" class="tablewrap"><div class="empty">กำลังโหลด...</div></div>' +
+    '</div>' +
+    '<div id="panel-grid" style="display:none;">' +
+    '<div class="daynav">' +
+    '<button type="button" class="ghost" id="btn-day-prev">← วันก่อนหน้า</button>' +
+    '<div class="lbl" id="grid-date-label"></div>' +
+    '<button type="button" class="ghost" id="btn-day-next">วันถัดไป →</button>' +
+    '</div>' +
+    '<div class="glegend">' +
+    '<span><span class="gswatch" style="background:#fff;border:1.5px solid #D9D7D2;"></span>ว่าง (กดเพื่อจองคิว)</span>' +
+    '<span><span class="gswatch" style="background:#C0553F;"></span>มีคิวจอง (กดเพื่อดู/แก้ไข)</span>' +
+    '<span><span class="gswatch" style="background:#9A948B;"></span>ปิดคิว</span>' +
+    '</div>' +
+    '<div class="gridwrap-outer"><div class="gridwrap" id="grid-wrap"><div class="empty">กำลังโหลด...</div></div></div>' +
+    '</div>' +
     '</div>' +
     '<div id="booking-modal" class="modal-overlay" style="display:none;">' +
     '<div class="modal">' +
@@ -646,7 +767,7 @@ function buildStaffHtml(email, authorized) {
     '<div class="field"><label>เวลาเริ่ม</label><input type="time" id="m-start"></div>' +
     '</div>' +
     '<div class="field"><label>ช่าง</label><select id="m-staff"></select></div>' +
-    '<div class="field"><label>ชื่อลูกค้า</label><input type="text" id="m-name" placeholder="เช่น คุณางฉาย"></div>' +
+    '<div class="field"><label>ชื่อลูกค้า</label><input type="text" id="m-name" placeholder="เช่น คุณสมชาย"></div>' +
     '<div class="field"><label>เบอร์โทร</label><input type="text" id="m-phone" inputmode="tel" placeholder="08x-xxx-xxxx"></div>' +
     '<div class="row2">' +
     '<div class="field"><label>ชื่อสัตว์เลี้ยง</label><input type="text" id="m-petname"></div>' +
@@ -660,14 +781,65 @@ function buildStaffHtml(email, authorized) {
     '</div>' +
     '</div>' +
     '</div>' +
+    '<div id="detail-modal" class="modal-overlay" style="display:none;">' +
+    '<div class="modal">' +
+    '<h2>รายละเอียดคิว</h2>' +
+    '<div id="detail-err" class="err"></div>' +
+    '<div id="detail-blocked-view" style="display:none;">' +
+    '<p style="color:#5A5650;font-size:13.5px;">ช่วงเวลานี้ถูกปิดไว้ (ไม่ใช่การจองของลูกค้า)</p>' +
+    '<div class="actions">' +
+    '<button type="button" class="ghost" id="btn-detail-close2">ปิดหน้าต่าง</button>' +
+    '<button type="button" class="danger" id="btn-detail-unblock">เปิดคิวนี้อีกครั้ง</button>' +
+    '</div>' +
+    '</div>' +
+    '<div id="detail-edit-view">' +
+    '<div class="field"><label>เลขที่การจอง</label><input type="text" id="d-bookingid" disabled></div>' +
+    '<div class="field"><label>บริการ</label><select id="d-service"></select></div>' +
+    '<div class="row2">' +
+    '<div class="field"><label>วันที่</label><input type="date" id="d-date"></div>' +
+    '<div class="field"><label>เวลาเริ่ม</label><input type="time" id="d-start"></div>' +
+    '</div>' +
+    '<div class="field"><label>ช่าง</label><select id="d-staff"></select></div>' +
+    '<div class="field"><label>ชื่อลูกค้า</label><input type="text" id="d-name"></div>' +
+    '<div class="field"><label>เบอร์โทร</label><input type="text" id="d-phone" inputmode="tel"></div>' +
+    '<div class="row2">' +
+    '<div class="field"><label>ชื่อสัตว์เลี้ยง</label><input type="text" id="d-petname"></div>' +
+    '<div class="field"><label>ประเภทสัตว์เลี้ยง</label><input type="text" id="d-pettype"></div>' +
+    '</div>' +
+    '<div class="field"><label>หมายเหตุ</label><textarea id="d-notes" rows="2"></textarea></div>' +
+    '<div class="actions">' +
+    '<button type="button" class="ghost" id="btn-detail-close">ปิด</button>' +
+    '<button type="button" class="danger" id="btn-detail-cancel">ยกเลิกคิวนี้</button>' +
+    '<button type="button" id="btn-detail-save">บันทึกการแก้ไข</button>' +
+    '</div>' +
+    '</div>' +
+    '</div>' +
+    '</div>' +
     '<script>' +
     'var ALL = [];' +
     'var FORM = { services: [], staffList: [], openTime: "", closeTime: "", slotMinutes: 30 };' +
+    'var gridDayIndex = 0;' +
+    'var GRID_DAYS = 10;' +
+    'var currentDetailId = null;' +
     'function load(){ google.script.run.withSuccessHandler(onData).withFailureHandler(onError).staffGetBookings(); }' +
     'function onError(e){ document.getElementById("tablewrap").innerHTML = "<div class=empty>โหลดไม่สำเร็จ: " + (e && e.message ? e.message : e) + "</div>"; }' +
-    'function onData(list){ ALL = list || []; renderTable(); }' +
+    'function onData(list){ ALL = list || []; renderTable(); if (document.getElementById("panel-grid").style.display !== "none") renderGrid(); }' +
     'function statusClass(s){ if (s === "จอง") return "status-active"; if (s === "ปิด") return "status-blocked"; return "status-cancelled"; }' +
     'function esc(s){ return String(s == null ? "" : s).replace(/[&<>"\\x27]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\\x27":"&#39;"}[c]; }); }' +
+    'function timeToMin(t){ var p = String(t).split(":"); return Number(p[0]) * 60 + Number(p[1] || 0); }' +
+    'function minToTime(m){ var h = Math.floor(m / 60), mm = m % 60; return (h < 10 ? "0" + h : h) + ":" + (mm < 10 ? "0" + mm : mm); }' +
+    'function todayLocal(){ var d = new Date(); d.setHours(0,0,0,0); return d; }' +
+    'function ymdLocal(d){ var m = d.getMonth() + 1, day = d.getDate(); return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day); }' +
+    'function dateStrForIndex(idx){ var d = todayLocal(); d.setDate(d.getDate() + idx); return ymdLocal(d); }' +
+    'function parseYMDLocal(s){ var p = s.split("-"); return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); }' +
+    'function labelForDate(dateStr, idx){' +
+    '  var d = parseYMDLocal(dateStr);' +
+    '  var weekdays = ["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];' +
+    '  var months = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];' +
+    '  var txt = "วัน" + weekdays[d.getDay()] + " " + d.getDate() + " " + months[d.getMonth()] + " " + (d.getFullYear() + 543);' +
+    '  if (idx === 0) txt += " (วันนี้)";' +
+    '  return txt;' +
+    '}' +
     'function renderTable(){' +
     '  var q = (document.getElementById("q").value || "").trim().toLowerCase();' +
     '  var rows = ALL.filter(function(b){ if (!q) return true; return [b.bookingId,b.customerName,b.phone,b.petName,b.staff].join(" ").toLowerCase().indexOf(q) !== -1; });' +
@@ -714,19 +886,24 @@ function buildStaffHtml(email, authorized) {
     '  var staffSel = document.getElementById("m-staff");' +
     '  staffSel.innerHTML = "<option value=\\"\\">ไม่ระบุ (ระบบเลือกช่างว่างให้)</option>" + FORM.staffList.map(function(n){ return "<option value=\\"" + esc(n) + "\\">" + esc(n) + "</option>"; }).join("");' +
     '  document.getElementById("modal-hint").textContent = "เวลาทำการ " + FORM.openTime + "–" + FORM.closeTime + " น. (ทีละ " + FORM.slotMinutes + " นาที)";' +
+    '  var dSvcSel = document.getElementById("d-service");' +
+    '  dSvcSel.innerHTML = FORM.services.map(function(s){ return "<option value=\\"" + esc(s.name) + "\\">" + esc(s.name) + " (" + s.durationMinutes + " นาที, ฿" + s.price + ")</option>"; }).join("");' +
+    '  var dStaffSel = document.getElementById("d-staff");' +
+    '  dStaffSel.innerHTML = FORM.staffList.map(function(n){ return "<option value=\\"" + esc(n) + "\\">" + esc(n) + "</option>"; }).join("");' +
+    '  if (document.getElementById("panel-grid").style.display !== "none") renderGrid();' +
     '}' +
     'function openNewBookingModal(prefill){' +
-    '  document.getElementById("modal-title").textContent = prefill ? "จองคิวใหม่ (เปลี่ยนวัน-เวลา)" : "จองคิวใหม่";' +
+    '  document.getElementById("modal-title").textContent = (prefill && prefill.customerName) ? "จองคิวใหม่ (เปลี่ยนวัน-เวลา)" : "จองคิวใหม่";' +
     '  document.getElementById("modal-err").style.display = "none";' +
-    '  document.getElementById("m-date").value = "";' +
-    '  document.getElementById("m-start").value = "";' +
-    '  document.getElementById("m-service").value = prefill ? prefill.service : "";' +
-    '  document.getElementById("m-staff").value = prefill ? prefill.staff : "";' +
-    '  document.getElementById("m-name").value = prefill ? prefill.customerName : "";' +
-    '  document.getElementById("m-phone").value = prefill ? prefill.phone : "";' +
-    '  document.getElementById("m-petname").value = prefill ? prefill.petName : "";' +
-    '  document.getElementById("m-pettype").value = prefill ? prefill.petType : "";' +
-    '  document.getElementById("m-notes").value = prefill ? prefill.notes : "";' +
+    '  document.getElementById("m-date").value = (prefill && prefill.date) ? prefill.date : "";' +
+    '  document.getElementById("m-start").value = (prefill && prefill.startTime) ? prefill.startTime : "";' +
+    '  document.getElementById("m-service").value = (prefill && prefill.service) ? prefill.service : "";' +
+    '  document.getElementById("m-staff").value = (prefill && prefill.staff) ? prefill.staff : "";' +
+    '  document.getElementById("m-name").value = (prefill && prefill.customerName) ? prefill.customerName : "";' +
+    '  document.getElementById("m-phone").value = (prefill && prefill.phone) ? prefill.phone : "";' +
+    '  document.getElementById("m-petname").value = (prefill && prefill.petName) ? prefill.petName : "";' +
+    '  document.getElementById("m-pettype").value = (prefill && prefill.petType) ? prefill.petType : "";' +
+    '  document.getElementById("m-notes").value = (prefill && prefill.notes) ? prefill.notes : "";' +
     '  document.getElementById("booking-modal").style.display = "flex";' +
     '}' +
     'function closeModal(){ document.getElementById("booking-modal").style.display = "none"; }' +
@@ -758,12 +935,168 @@ function buildStaffHtml(email, authorized) {
     '    errEl.textContent = e && e.message ? e.message : String(e); errEl.style.display = "block";' +
     '  }).staffCreateBooking(payload);' +
     '}' +
+    'function switchTab(tab){' +
+    '  var isList = tab === "list";' +
+    '  document.getElementById("panel-list").style.display = isList ? "" : "none";' +
+    '  document.getElementById("panel-grid").style.display = isList ? "none" : "";' +
+    '  document.getElementById("tab-btn-list").className = "gtab-btn" + (isList ? " active" : "");' +
+    '  document.getElementById("tab-btn-grid").className = "gtab-btn" + (isList ? "" : " active");' +
+    '  if (!isList) renderGrid();' +
+    '}' +
+    'function renderGrid(){' +
+    '  var wrap = document.getElementById("grid-wrap");' +
+    '  if (!FORM.staffList || !FORM.staffList.length) { wrap.innerHTML = "<div class=empty>ยังโหลดข้อมูลไม่เสร็จ...</div>"; return; }' +
+    '  var dateStr = dateStrForIndex(gridDayIndex);' +
+    '  document.getElementById("grid-date-label").textContent = labelForDate(dateStr, gridDayIndex);' +
+    '  document.getElementById("btn-day-prev").disabled = gridDayIndex <= 0;' +
+    '  document.getElementById("btn-day-next").disabled = gridDayIndex >= (GRID_DAYS - 1);' +
+    '  var openM = timeToMin(FORM.openTime), closeM = timeToMin(FORM.closeTime), slotM = FORM.slotMinutes || 30;' +
+    '  var bookingsForDate = ALL.filter(function(b){ return b.date === dateStr && (b.status === "จอง" || b.status === "ปิด"); });' +
+    '  wrap.innerHTML = "";' +
+    '  var grid = document.createElement("div");' +
+    '  grid.className = "g-grid";' +
+    '  var headRow = document.createElement("div");' +
+    '  headRow.className = "g-row";' +
+    '  var corner = document.createElement("div");' +
+    '  corner.className = "g-corner";' +
+    '  headRow.appendChild(corner);' +
+    '  var mm;' +
+    '  for (mm = openM; mm < closeM; mm += slotM) {' +
+    '    var colhead = document.createElement("div");' +
+    '    colhead.className = "g-colhead";' +
+    '    colhead.textContent = minToTime(mm);' +
+    '    headRow.appendChild(colhead);' +
+    '  }' +
+    '  grid.appendChild(headRow);' +
+    '  FORM.staffList.forEach(function(staffName){' +
+    '    var row = document.createElement("div");' +
+    '    row.className = "g-row";' +
+    '    var rowLabel = document.createElement("div");' +
+    '    rowLabel.className = "g-rowlabel";' +
+    '    rowLabel.textContent = staffName;' +
+    '    row.appendChild(rowLabel);' +
+    '    for (var m2 = openM; m2 < closeM; m2 += slotM) {' +
+    '      var slotStart = m2, slotEnd = m2 + slotM;' +
+    '      var match = null;' +
+    '      for (var i = 0; i < bookingsForDate.length; i++) {' +
+    '        var b = bookingsForDate[i];' +
+    '        if (b.staff !== staffName) continue;' +
+    '        var bStart = timeToMin(b.startTime), bEnd = timeToMin(b.endTime);' +
+    '        if (slotStart < bEnd && slotEnd > bStart) { match = b; break; }' +
+    '      }' +
+    '      var cell = document.createElement("button");' +
+    '      cell.type = "button";' +
+    '      if (match) {' +
+    '        var isBlocked = match.status === "ปิด";' +
+    '        var isStart = timeToMin(match.startTime) === slotStart;' +
+    '        cell.className = "g-cell " + (isBlocked ? "g-blocked" : "g-booked");' +
+    '        cell.title = (isBlocked ? "ปิดคิว" : (match.customerName + " · " + match.service)) + " · " + match.startTime + "-" + match.endTime;' +
+    '        if (isStart) cell.textContent = (isBlocked ? "ปิด" : (match.customerName || "")).slice(0, 6);' +
+    '        cell.onclick = (function(rec){ return function(){ openDetailModal(rec); }; })(match);' +
+    '      } else {' +
+    '        cell.className = "g-cell g-free";' +
+    '        cell.title = "ว่าง " + minToTime(m2) + " น. — กดเพื่อจอง";' +
+    '        cell.onclick = (function(d, t, s){ return function(){ openNewBookingModal({ date: d, startTime: t, staff: s }); }; })(dateStr, minToTime(m2), staffName);' +
+    '      }' +
+    '      row.appendChild(cell);' +
+    '    }' +
+    '    grid.appendChild(row);' +
+    '  });' +
+    '  wrap.appendChild(grid);' +
+    '}' +
+    'function openDetailModal(rec){' +
+    '  currentDetailId = rec.bookingId;' +
+    '  document.getElementById("detail-err").style.display = "none";' +
+    '  if (rec.status === "ปิด") {' +
+    '    document.getElementById("detail-blocked-view").style.display = "block";' +
+    '    document.getElementById("detail-edit-view").style.display = "none";' +
+    '  } else {' +
+    '    document.getElementById("detail-blocked-view").style.display = "none";' +
+    '    document.getElementById("detail-edit-view").style.display = "block";' +
+    '    document.getElementById("d-bookingid").value = rec.bookingId;' +
+    '    document.getElementById("d-service").value = rec.service;' +
+    '    document.getElementById("d-date").value = rec.date;' +
+    '    document.getElementById("d-start").value = rec.startTime;' +
+    '    document.getElementById("d-staff").value = rec.staff;' +
+    '    document.getElementById("d-name").value = rec.customerName;' +
+    '    document.getElementById("d-phone").value = rec.phone;' +
+    '    document.getElementById("d-petname").value = rec.petName;' +
+    '    document.getElementById("d-pettype").value = rec.petType;' +
+    '    document.getElementById("d-notes").value = rec.notes;' +
+    '  }' +
+    '  document.getElementById("detail-modal").style.display = "flex";' +
+    '}' +
+    'function closeDetailModal(){ document.getElementById("detail-modal").style.display = "none"; currentDetailId = null; }' +
+    'function saveDetailEdit(){' +
+    '  var payload = {' +
+    '    service: document.getElementById("d-service").value,' +
+    '    date: document.getElementById("d-date").value,' +
+    '    startTime: document.getElementById("d-start").value,' +
+    '    staff: document.getElementById("d-staff").value,' +
+    '    customerName: document.getElementById("d-name").value.trim(),' +
+    '    phone: document.getElementById("d-phone").value.trim(),' +
+    '    petName: document.getElementById("d-petname").value.trim(),' +
+    '    petType: document.getElementById("d-pettype").value.trim(),' +
+    '    notes: document.getElementById("d-notes").value.trim()' +
+    '  };' +
+    '  var errEl = document.getElementById("detail-err");' +
+    '  if (!payload.service || !payload.date || !payload.startTime || !payload.staff || !payload.customerName || !payload.phone) {' +
+    '    errEl.textContent = "กรอกข้อมูลให้ครบ: บริการ, วันที่, เวลา, ช่าง, ชื่อลูกค้า, เบอร์โทร"; errEl.style.display = "block"; return;' +
+    '  }' +
+    '  var btn = document.getElementById("btn-detail-save");' +
+    '  btn.disabled = true; btn.textContent = "กำลังบันทึก...";' +
+    '  google.script.run.withSuccessHandler(function(res){' +
+    '    btn.disabled = false; btn.textContent = "บันทึกการแก้ไข";' +
+    '    if (res && res.ok) { closeDetailModal(); load(); }' +
+    '    else { errEl.textContent = (res && res.error) || "บันทึกไม่สำเร็จ"; errEl.style.display = "block"; }' +
+    '  }).withFailureHandler(function(e){' +
+    '    btn.disabled = false; btn.textContent = "บันทึกการแก้ไข";' +
+    '    errEl.textContent = e && e.message ? e.message : String(e); errEl.style.display = "block";' +
+    '  }).staffUpdateBooking(currentDetailId, payload);' +
+    '}' +
+    'function cancelFromDetail(){' +
+    '  if (!currentDetailId) return;' +
+    '  if (!confirm("ยืนยันยกเลิกคิวนี้?")) return;' +
+    '  var btn = document.getElementById("btn-detail-cancel");' +
+    '  btn.disabled = true; btn.textContent = "กำลังยกเลิก...";' +
+    '  google.script.run.withSuccessHandler(function(res){' +
+    '    btn.disabled = false; btn.textContent = "ยกเลิกคิวนี้";' +
+    '    if (res && res.ok) { closeDetailModal(); load(); }' +
+    '    else { alert((res && res.error) || "ยกเลิกไม่สำเร็จ"); }' +
+    '  }).withFailureHandler(function(e){' +
+    '    btn.disabled = false; btn.textContent = "ยกเลิกคิวนี้";' +
+    '    alert(e && e.message ? e.message : e);' +
+    '  }).staffCancelBooking(currentDetailId);' +
+    '}' +
+    'function unblockFromDetail(){' +
+    '  if (!currentDetailId) return;' +
+    '  if (!confirm("ยืนยันเปิดคิวช่วงเวลานี้อีกครั้ง?")) return;' +
+    '  var btn = document.getElementById("btn-detail-unblock");' +
+    '  btn.disabled = true; btn.textContent = "กำลังเปิดคิว...";' +
+    '  google.script.run.withSuccessHandler(function(res){' +
+    '    btn.disabled = false; btn.textContent = "เปิดคิวนี้อีกครั้ง";' +
+    '    if (res && res.ok) { closeDetailModal(); load(); }' +
+    '    else { alert((res && res.error) || "ทำรายการไม่สำเร็จ"); }' +
+    '  }).withFailureHandler(function(e){' +
+    '    btn.disabled = false; btn.textContent = "เปิดคิวนี้อีกครั้ง";' +
+    '    alert(e && e.message ? e.message : e);' +
+    '  }).staffCancelBooking(currentDetailId);' +
+    '}' +
     'window.addEventListener("DOMContentLoaded", function(){' +
     '  document.getElementById("btn-refresh").onclick = load;' +
     '  document.getElementById("q").oninput = renderTable;' +
     '  document.getElementById("btn-new-booking").onclick = function(){ openNewBookingModal(null); };' +
     '  document.getElementById("btn-modal-cancel").onclick = closeModal;' +
     '  document.getElementById("btn-modal-submit").onclick = submitNewBooking;' +
+    '  document.getElementById("tab-btn-list").onclick = function(){ switchTab("list"); };' +
+    '  document.getElementById("tab-btn-grid").onclick = function(){ switchTab("grid"); };' +
+    '  document.getElementById("btn-day-prev").onclick = function(){ if (gridDayIndex > 0){ gridDayIndex--; renderGrid(); } };' +
+    '  document.getElementById("btn-day-next").onclick = function(){ if (gridDayIndex < GRID_DAYS - 1){ gridDayIndex++; renderGrid(); } };' +
+    '  document.getElementById("btn-detail-close").onclick = closeDetailModal;' +
+    '  document.getElementById("btn-detail-close2").onclick = closeDetailModal;' +
+    '  document.getElementById("btn-detail-cancel").onclick = cancelFromDetail;' +
+    '  document.getElementById("btn-detail-save").onclick = saveDetailEdit;' +
+    '  document.getElementById("btn-detail-unblock").onclick = unblockFromDetail;' +
     '  loadFormOptions();' +
     '  load();' +
     '});' +
