@@ -88,6 +88,10 @@ input,select,textarea{font-family:inherit;font-size:15px}
 .cp-swatch{width:12px;height:12px;border-radius:3px}
 
 /* grid */
+.cp-scroll-hint{display:flex;align-items:center;gap:5px;padding:0 20px;font-size:11.5px;font-weight:600;color:var(--text-muted)}
+.cp-scroll-hint svg{flex:0 0 auto;width:14px;height:14px}
+.cp-gridwrap-outer{position:relative}
+.cp-gridwrap-outer::after{content:'';position:absolute;top:0;right:0;bottom:8px;width:32px;background:linear-gradient(to right, transparent, var(--surface-page) 65%);pointer-events:none}
 .cp-gridwrap{overflow-x:auto;padding:4px 20px 8px}
 .cp-grid{display:flex;flex-direction:column;gap:3px;width:fit-content}
 .cp-grid-row{display:flex;gap:3px}
@@ -347,10 +351,13 @@ function renderScheduleView() {
       <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--danger-500);"></div>ไม่ว่าง</div>
       <div class="cp-legend-item"><div class="cp-swatch" style="background:var(--ink-300);"></div>หยุด/ผ่านไปแล้ว</div>
     </div>
-    <div class="cp-gridwrap">
-      <div class="cp-grid">
-        <div class="cp-grid-row"><div class="cp-corner"></div>${cols}</div>
-        ${rows}
+    <div class="cp-scroll-hint">เลื่อนดูช่วงเวลาอื่นได้ ${ICONS.arrowRight}</div>
+    <div class="cp-gridwrap-outer">
+      <div class="cp-gridwrap">
+        <div class="cp-grid">
+          <div class="cp-grid-row"><div class="cp-corner"></div>${cols}</div>
+          ${rows}
+        </div>
       </div>
     </div>
   </div>`;
