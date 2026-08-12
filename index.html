@@ -176,6 +176,26 @@ const state = {
   selectedDayIndex: 0
 };
 
+/* ---------------------------------------------------------------- local cache (โหลดครั้งถัดไปให้เห็นข้อมูลทันทีระหว่างรอของใหม่) */
+const LOCAL_CACHE_KEY = 'cp_schedule_cache_v1';
+function loadFromLocalCache() {
+  try {
+    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data) return false;
+    state.schedule = parsed.data;
+    state.isMock = false;
+    state.loading = false;
+    state.error = false;
+    state.lastUpdated = parsed.ts ? new Date(parsed.ts) : null;
+    return true;
+  } catch (e) { return false; }
+}
+function saveToLocalCache(json) {
+  try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ data: json, ts: Date.now() })); } catch (e) {}
+}
+
 /* ---------------------------------------------------------------- data */
 function loadSchedule(background) {
   if (!background) { state.loading = true; state.error = false; render(); }
@@ -188,9 +208,14 @@ function loadSchedule(background) {
         state.isMock = false;
         state.loading = false; state.error = false;
         state.lastUpdated = new Date();
+        saveToLocalCache(json);
         render();
       })
-      .catch(() => { state.loading = false; state.error = true; render(); });
+      .catch(() => {
+        state.loading = false;
+        state.error = !state.schedule; // มีข้อมูลเก่าอยู่แล้วก็โชว์ของเดิมไปก่อน ไม่ต้องขึ้นหน้า error ทับ
+        render();
+      });
   } else {
     setTimeout(() => {
       state.schedule = generateMockSchedule();
@@ -441,7 +466,9 @@ function openLine() {
 }
 
 /* ---------------------------------------------------------------- init */
-loadSchedule(false);
+const hadLocalCache = loadFromLocalCache();
+if (hadLocalCache) render(); // โชว์ข้อมูลล่าสุดที่เคยโหลดไว้ทันที ระหว่างรอของใหม่จริงด้านหลัง
+loadSchedule(hadLocalCache); // ถ้ามีของเก่าอยู่แล้วให้โหลดเงียบ ๆ ด้านหลัง ไม่ต้องขึ้นสปินเนอร์ซ้ำ
 setInterval(() => loadSchedule(true), AUTO_REFRESH_MS);
 </script>
 </body>
