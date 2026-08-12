@@ -259,6 +259,34 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = renderHeader() + renderMain() + renderFooter();
   bindEvents();
+  scrollGridToNow();
+}
+
+/* เลื่อนตารางคิวไปที่ช่วงเวลาปัจจุบันอัตโนมัติ (เฉพาะตอนดูวันนี้) เพื่อไม่ต้องเลื่อนเอง */
+function scrollGridToNow() {
+  if (state.loading || state.error || !state.schedule) return;
+  const days = state.schedule.days;
+  const day = days && days[state.selectedDayIndex];
+  if (!day || !day.slots || !day.slots.length) return;
+  const now = new Date();
+  const dayDate = parseYMD(day.date);
+  if (!isSameDate(dayDate, now)) return;
+  const wrap = document.querySelector('.cp-gridwrap');
+  if (!wrap) return;
+  const colLabels = wrap.querySelectorAll('.cp-collabel');
+  if (!colLabels.length) return;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  let targetIdx = -1;
+  for (let i = 0; i < day.slots.length; i++) {
+    if (timeToMinutes(day.slots[i].start) <= nowMinutes) targetIdx = i; else break;
+  }
+  if (targetIdx < 0) return; // ยังไม่ถึงเวลาเปิดร้าน โชว์จากช่วงแรกตามปกติ
+  targetIdx = Math.max(0, targetIdx - 1); // เผื่อเห็นช่วงก่อนหน้าปัจจุบันไว้นิดหน่อยเป็นบริบท
+  const targetEl = colLabels[targetIdx];
+  const corner = wrap.querySelector('.cp-corner');
+  if (!targetEl) return;
+  const offset = targetEl.offsetLeft - (corner ? corner.offsetWidth : 0);
+  wrap.scrollLeft = Math.max(0, offset);
 }
 
 function brand() { return state.schedule || FALLBACK; }
