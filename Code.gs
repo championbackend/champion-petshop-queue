@@ -243,11 +243,46 @@ function headerIndexMap() {
 // สร้าง JSON ตารางคิวว่าง (ใช้ทั้งหน้าเช็กคิว และคำนวณช่วงว่างสำหรับจอง)
 // ================================================================
 var SCHEDULE_CACHE_KEY = 'schedule_v1';
-var SCHEDULE_CACHE_SECONDS = 30;
+// เก็บ cache ไว้ 6 นาที ให้ยาวกว่ารอบ keepWarm (ทุก 5 นาที) เล็กน้อย จะได้มีของพร้อมเสิร์ฟตลอดเวลา
+// ความสดของข้อมูลไม่เสีย เพราะล้าง cache ทันทีทั้งเมื่อจอง/ยกเลิก/แก้ไขผ่านระบบ และเมื่อมีคนแก้ Google Sheet เอง
+var SCHEDULE_CACHE_SECONDS = 360;
 
 // ล้าง cache ตารางคิว — เรียกทุกครั้งที่มีการจอง/ยกเลิก/แก้ไขคิว เพื่อให้ลูกค้าเห็นข้อมูลล่าสุดทันที
 function invalidateScheduleCache() {
   try { CacheService.getScriptCache().remove(SCHEDULE_CACHE_KEY); } catch (e) {}
+}
+
+// ==================================================================
+// กันไม่ให้ลูกค้าเจอ "cold start" (Google ปิดเครื่องทิ้งเมื่อไม่มีคนใช้ แล้วคนแรกต้องรอบูตใหม่ 10-20 วินาที)
+// ตั้งเป็น trigger รายเวลา ทุก 5 นาที ผ่านฟังก์ชัน installPerformanceTriggers() ด้านล่าง
+// ทำ 2 อย่างพร้อมกัน: (1) ให้สคริปต์ถูกเรียกใช้สม่ำเสมอจนไม่ถูกปิดทิ้ง (2) เตรียมข้อมูลใส่ cache ไว้ล่วงหน้า
+// ==================================================================
+function keepWarm() {
+  invalidateScheduleCache();   // บังคับให้อ่านของจริงใหม่ ไม่ใช่คืนของเก่าใน cache
+  buildScheduleResponse();     // สร้างใหม่แล้วเก็บลง cache ให้ลูกค้าคนถัดไปได้ของทันที
+}
+
+// ถ้าเจ้าหน้าที่ไปแก้คิวใน Google Sheet โดยตรง (ไม่ผ่านหน้าเว็บ) ให้ล้าง cache ทันทีเช่นกัน
+// กันข้อมูลค้าง — ติดตั้งเป็น trigger แบบ on edit ผ่าน installPerformanceTriggers()
+function onEditInvalidate(e) {
+  invalidateScheduleCache();
+}
+
+// รันฟังก์ชันนี้ "ครั้งเดียว" จาก Apps Script editor เพื่อติดตั้ง trigger ทั้งสองตัว
+// (รันซ้ำได้ ระบบจะลบ trigger เดิมของสองฟังก์ชันนี้ก่อน ไม่เกิดตัวซ้ำ)
+function installPerformanceTriggers() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = ScriptApp.getProjectTriggers();
+  existing.forEach(function (t) {
+    var fn = t.getHandlerFunction();
+    if (fn === 'keepWarm' || fn === 'onEditInvalidate') ScriptApp.deleteTrigger(t);
+  });
+
+  ScriptApp.newTrigger('keepWarm').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('onEditInvalidate').forSpreadsheet(ss).onEdit().create();
+
+  var names = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  return 'ติดตั้ง trigger เรียบร้อย: ' + names.join(', ');
 }
 
 function buildScheduleResponse() {
