@@ -242,7 +242,21 @@ function headerIndexMap() {
 // ================================================================
 // สร้าง JSON ตารางคิวว่าง (ใช้ทั้งหน้าเช็กคิว และคำนวณช่วงว่างสำหรับจอง)
 // ================================================================
+var SCHEDULE_CACHE_KEY = 'schedule_v1';
+var SCHEDULE_CACHE_SECONDS = 30;
+
+// ล้าง cache ตารางคิว — เรียกทุกครั้งที่มีการจอง/ยกเลิก/แก้ไขคิว เพื่อให้ลูกค้าเห็นข้อมูลล่าสุดทันที
+function invalidateScheduleCache() {
+  try { CacheService.getScriptCache().remove(SCHEDULE_CACHE_KEY); } catch (e) {}
+}
+
 function buildScheduleResponse() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(SCHEDULE_CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+
   var settings = getSettings();
   var staffList = getStaffList();
   var services = getServices();
@@ -293,7 +307,7 @@ function buildScheduleResponse() {
     days.push({ date: dateStr, slots: slots });
   }
 
-  return {
+  var result = {
     shopName: settings.shopName,
     tagline: settings.tagline,
     hoursText: settings.hoursText,
@@ -306,6 +320,10 @@ function buildScheduleResponse() {
     days: days,
     generatedAt: new Date().toISOString()
   };
+
+  try { cache.put(SCHEDULE_CACHE_KEY, JSON.stringify(result), SCHEDULE_CACHE_SECONDS); } catch (e) {}
+
+  return result;
 }
 
 // ================================================================
@@ -390,6 +408,7 @@ function createBooking(body) {
     var newRow = sh.getLastRow();
     sh.getRange(newRow, headerIndexMap().Phone + 1).setNumberFormat('@').setValue(phone);
 
+    invalidateScheduleCache();
     return {
       ok: true,
       bookingId: bookingId,
@@ -423,6 +442,7 @@ function cancelBooking(body) {
           return { ok: false, error: 'เบอร์โทรไม่ตรงกับการจองนี้' };
         }
         sh.getRange(i + 2, idx.Status + 1).setValue(STATUS_CANCELLED);
+        invalidateScheduleCache();
         return { ok: true, bookingId: bookingId };
       }
     }
@@ -534,6 +554,7 @@ function staffCancelBooking(bookingId) {
     for (var i = 0; i < data.length; i++) {
       if (String(data[i][idx.BookingID]) === bookingId) {
         sh.getRange(i + 2, idx.Status + 1).setValue(STATUS_CANCELLED);
+        invalidateScheduleCache();
         return { ok: true, bookingId: bookingId };
       }
     }
@@ -628,6 +649,7 @@ function staffUpdateBooking(bookingId, fields) {
     sh.getRange(sheetRow, idx.Service + 1).setValue(serviceName);
     sh.getRange(sheetRow, idx.Notes + 1).setValue(notes);
 
+    invalidateScheduleCache();
     return { ok: true, bookingId: bookingId };
   } finally {
     lock.releaseLock();
