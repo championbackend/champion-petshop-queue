@@ -142,7 +142,9 @@ input,select,textarea{font-family:inherit;font-size:15px}
    3. วางแทนค่าว่างด้านล่างนี้
    ถ้าเว้นว่างไว้ แอพจะโชว์ "ข้อมูลจำลอง" ให้พรีวิวได้โดยไม่ต้องต่อ Sheet
    ========================================================================== */
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzIoxyPC9tX9dJrymqOUwM6l_BzEv79gZXqyIAtCE-fZIt69hb7UEFlimmSOAbf0W61Ig/exec'; // <-- วาง URL ของ Apps Script Web App (/exec) ตรงนี้
+// ยิงผ่าน /api/schedule ของเว็บเราเอง (ดูไฟล์ api/schedule.js) แทนการยิงตรงไป script.google.com
+// เพราะการยิงตรงต้องเด้ง redirect ข้ามโดเมน ทำให้บนมือถือช้ามากจนบางครั้งโหลดไม่ขึ้นเลย
+const APPS_SCRIPT_URL = '/api/schedule';
 const AUTO_REFRESH_MS = 45000; // รีเฟรชคิวอัตโนมัติทุกกี่มิลลิวินาที (เพื่อความเป็นเรียลไทม์)
 
 const FALLBACK = {
@@ -171,7 +173,7 @@ const state = {
   loading: true,
   error: false,
   schedule: null,
-  isMock: true,
+  isMock: false, // จะเป็น true ก็ต่อเมื่อใช้ข้อมูลจำลองจริง ๆ เท่านั้น (กันป้าย "ข้อมูลจำลอง" ขึ้นผิดตอนโหลดพลาด)
   lastUpdated: null,
   selectedDayIndex: 0
 };
